@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Softys — Seguimiento Tablas vs Modelos BI — QAS</title>
+<!-- MSAL for Microsoft Graph auth (browser public client, no app registration needed) -->
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI",system-ui,sans-serif;font-size:12px;background:#f6f7f9;color:#1f2328;line-height:1.45}
+.page{padding:16px 18px 40px}
+h1{font-size:19px;font-weight:600}
+.meta{font-size:11.5px;color:#57606a;margin:3px 0 14px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:8px}
+
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px}
+.kpi .num{font-size:21px;font-weight:700;letter-spacing:-.01em}
+.kpi .lbl{font-size:10px;color:#57606a;text-transform:uppercase;letter-spacing:.04em;margin-top:1px}
+.kpi .sub{font-size:10.5px;color:#8b949e;margin-top:2px}
+.kpi.ok .num{color:#15803d}.kpi.warn .num{color:#b45309}.kpi.bad .num{color:#b91c1c}.kpi.neu .num{color:#2563eb}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;border-bottom:1px solid #e5e7eb;margin-bottom:12px;flex-wrap:wrap}
+.tab{padding:7px 14px;font-size:12.5px;font-weight:500;color:#57606a;cursor:pointer;border:1px solid transparent;border-bottom:none;border-radius:7px 7px 0 0;margin-bottom:-1px;user-select:none}
+.tab:hover{color:#1f2328;background:#eef0f3}
+.tab.active{background:#fff;border-color:#e5e7eb;color:#1f2328;font-weight:600}
+.tab .badge{display:inline-block;background:#eef0f3;color:#57606a;border-radius:9px;padding:0 6px;font-size:10px;margin-left:5px;font-weight:600}
+.tab.active .badge{background:#dbeafe;color:#1e40af}
+.panel{display:none}.panel.active{display:block}
+
+/* Filtros */
+.filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.filter-bar input[type=text],.filter-bar select{border:1px solid #d8dbe0;border-radius:6px;padding:5px 9px;font-size:12px;outline:none;background:#fff;font-family:inherit}
+.filter-bar input[type=text]{width:200px}
+.filter-bar input:focus,.filter-bar select:focus{border-color:#2563eb;box-shadow:0 0 0 2px #dbeafe}
+.btn{border:1px solid #d8dbe0;background:#fff;border-radius:6px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit;color:#1f2328}
+.btn:hover{background:#f3f4f6}
+.btn.primary{background:#2563eb;border-color:#2563eb;color:#fff}
+.btn.primary:hover{background:#1d4ed8}
+.count-note{font-size:11px;color:#57606a;font-weight:500}
+.spacer{flex:1}
+
+/* Tabla matriz */
+.table-wrap{overflow:auto;max-height:72vh;border:1px solid #e5e7eb;border-radius:8px;background:#fff}
+table{border-collapse:collapse;width:max-content;min-width:100%}
+thead{position:sticky;top:0;z-index:10}
+thead th{background:#f7f8fa;border:1px solid #e5e7eb;padding:5px 4px;font-size:10px;font-weight:600;text-align:center;white-space:nowrap}
+th.env-hdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:6px 4px;white-space:nowrap}
+th.env-hdr.cp{background:#dbeafe;color:#1e40af}
+th.env-hdr.fw{background:#ede9fe;color:#5b21b6}
+th.mhdr{height:130px;vertical-align:bottom;padding:0;font-size:10px;font-weight:500;max-width:24px;cursor:pointer}
+th.mhdr span{display:inline-block;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);white-space:nowrap;font-size:10px;font-weight:500;padding:6px 3px}
+th.mhdr.cp{background:#eff6ff;color:#1e3a8a}
+th.mhdr.fw{background:#f5f3ff;color:#4c1d95}
+th.mhdr:hover{background:#fde68a;color:#78350f}
+th.mhdr.sel{background:#fbbf24;color:#78350f;font-weight:700}
+th.fixed-hdr{text-align:left;min-width:172px;left:0;z-index:14!important}
+thead tr:first-child th.fixed-hdr,thead tr:first-child th.sticky2,thead tr:first-child th.sticky3{z-index:14}
+td{border-right:1px solid #eef0f3;border-bottom:1px solid #eef0f3;padding:2px 3px;text-align:center;font-size:11px;vertical-align:middle;background:#fff}
+tbody tr:nth-child(even) td{background:#fbfcfd}
+tbody tr:hover td{background:#f0f9ff}
+td.tbl-name{text-align:left;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;font-weight:500;white-space:nowrap;padding:2px 8px;position:sticky;left:0;z-index:5;border-right:1px solid #e5e7eb}
+tbody tr:nth-child(even) td.tbl-name{background:#fbfcfd}
+tbody tr:hover td.tbl-name{background:#f0f9ff}
+td.used{color:#166534;font-size:13px;font-weight:700}
+td.hl{background:#fef3c7!important}
+.chip{display:inline-block;border-radius:10px;padding:1px 7px;font-size:9.5px;font-weight:600;white-space:nowrap;letter-spacing:.02em}
+.chip.qas{background:#dcfce7;color:#166534}
+.chip.pdf{background:#fef9c3;color:#92400e}
+.chip.new{background:#fee2e2;color:#991b1b}
+.chip.cp{background:#dbeafe;color:#1e40af}
+.chip.fw{background:#ede9fe;color:#5b21b6}
+.chip.st-pendiente{background:#eef0f3;color:#57606a}
+.chip.st-revision{background:#dbeafe;color:#1e40af}
+.chip.st-validada{background:#dcfce7;color:#166534}
+.chip.st-hallazgo{background:#fee2e2;color:#991b1b}
+.chip.st-descartada{background:#f3e8ff;color:#6b21a8}
+td.count{font-weight:700}
+.cnt-zero{color:#d1d5db}
+.num-cell{font-variant-numeric:tabular-nums}
+
+/* Vista por modelo */
+.model-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:9px}
+.model-card{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;cursor:pointer}
+.model-card:hover{border-color:#2563eb;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+.model-card.active{border-color:#2563eb;box-shadow:0 0 0 2px #dbeafe}
+.model-card .mname{font-weight:600;font-size:12.5px;font-family:ui-monospace,Menlo,Consolas,monospace;margin-bottom:5px;word-break:break-all}
+.bar{height:6px;border-radius:3px;background:#eef0f3;overflow:hidden;margin:6px 0 4px;display:flex}
+.bar span{display:block;height:100%}
+.bar .b-ok{background:#22c55e}.bar .b-out{background:#f59e0b}.bar .b-new{background:#ef4444}
+.model-card .mmeta{font-size:10.5px;color:#57606a}
+.detail{margin-top:12px}
+.detail h3{font-size:13px;font-weight:600;margin-bottom:8px}
+.tag-list{display:flex;flex-wrap:wrap;gap:5px}
+.tag{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;border:1px solid #e5e7eb;border-radius:5px;padding:2px 7px;background:#fff}
+.tag.qas{border-color:#86efac;background:#f0fdf4;color:#166534}
+.tag.pdf{border-color:#fde047;background:#fefce8;color:#92400e}
+.tag.new{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
+
+/* Secciones cruce */
+.section{margin-bottom:16px}
+.section-head{display:flex;align-items:center;gap:9px;padding:10px 12px;border-bottom:1px solid #e5e7eb;cursor:pointer;user-select:none}
+.section-head h3{font-size:13px;font-weight:600}
+.section-head .n{font-size:11px;font-weight:700;border-radius:10px;padding:1px 8px}
+.section-head .desc{font-size:11px;color:#57606a;font-weight:400}
+.section-body{padding:10px 12px;max-height:340px;overflow:auto}
+.section.collapsed .section-body{display:none}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.dot.bad{background:#ef4444}.dot.warn{background:#f59e0b}.dot.ok{background:#22c55e}
+
+/* Seguimiento */
+.track-table{width:100%;border-collapse:collapse}
+.track-table th{background:#f7f8fa;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#57606a;text-align:left;padding:7px 9px;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:3}
+.track-table td{padding:4px 9px;border-bottom:1px solid #eef0f3;font-size:11.5px;text-align:left}
+.track-table select,.track-table input{border:1px solid #e5e7eb;border-radius:5px;padding:3px 6px;font-size:11.5px;font-family:inherit;background:#fff;width:100%;outline:none}
+.track-table select:focus,.track-table input:focus{border-color:#2563eb}
+.track-table .tname{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:500;white-space:nowrap}
+.progress-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.pstat{display:flex;align-items:center;gap:6px;font-size:11px;background:#fff;border:1px solid #e5e7eb;border-radius:7px;padding:5px 10px}
+.pstat b{font-size:14px;font-variant-numeric:tabular-nums}
+.footer{margin-top:22px;border-top:1px solid #e5e7eb;padding-top:10px;text-align:center;font-size:11px;color:#8b949e}
+.hint{font-size:11px;color:#57606a;background:#f7f8fa;border:1px solid #e5e7eb;border-left:3px solid #2563eb;border-radius:0 6px 6px 0;padding:7px 11px;margin-bottom:11px}
+.toast{position:fixed;bottom:18px;right:18px;background:#1f2328;color:#fff;padding:9px 15px;border-radius:7px;font-size:12px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:100}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="page">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:2px">
+    <h1>Softys — Seguimiento Tablas vs Modelos BI</h1>
+    <span id="syncStatus" style="font-size:11px;color:#57606a;background:#f7f8fa;border:1px solid #e5e7eb;border-radius:6px;padding:3px 10px">⏳ Conectando con OneDrive…</span>
+  </div>
+  <div class="meta" id="metaLine"></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="matriz">Matriz tablas × modelos</div>
+    <div class="tab" data-tab="resumen">Resumen <span class="badge" id="bResumen" style="background:#fbbf24;color:#78350f"></span></div>
+    <div class="tab" data-tab="modelos">Vista por modelo <span class="badge" id="bModelos"></span></div>
+    <div class="tab" data-tab="cruce">Cruce con alcance QAS <span class="badge" id="bCruce"></span></div>
+    <div class="tab" data-tab="rf">Replication Flows <span class="badge" id="bRF"></span></div>
+    <div class="tab" data-tab="pendientes">Pendientes x RF <span class="badge" id="bPend"></span></div>
+    <div class="tab" data-tab="ejecutadas">Ejecutadas x RF <span class="badge" id="bEjec"></span></div>
+    <div class="tab" data-tab="seguimiento">Seguimiento <span class="badge" id="bSeg"></span></div>
+  </div>
+
+  <!-- MATRIZ -->
+  <div class="panel active" id="panel-matriz">
+    <div class="filter-bar">
+      <input type="text" id="fTexto" placeholder="Buscar tabla…">
+      <select id="fAlcance">
+        <option value="">Todo el alcance</option>
+        <option value="QAS">Solo en alcance QAS (321)</option>
+        <option value="PDF">Fuera de alcance (PDF)</option>
+        <option value="NEW">No listada en el PDF</option>
+        <option value="NOQAS">Todo lo que no es QAS</option>
+      </select>
+      <select id="fUso">
+        <option value="">Cualquier uso</option>
+        <option value="used">Usada en algún modelo</option>
+        <option value="unused">Sin uso en ningún modelo</option>
+        <option value="cp">Solo en Core Platform</option>
+        <option value="fw">Solo en Framework</option>
+        <option value="both">En ambos repositorios</option>
+      </select>
+      <select id="fEstado">
+        <option value="">Cualquier estado</option>
+        <option value="pendiente">Pendiente</option>
+        <option value="revision">En revisión</option>
+        <option value="validada">Validada</option>
+        <option value="hallazgo">Con hallazgo</option>
+        <option value="descartada">Descartada</option>
+      </select>
+      <select id="fModelo"><option value="">Todos los modelos</option></select>
+      <div style="display:flex;gap:4px;margin-left:4px">
+        <button class="btn" id="btnRepoBoth" onclick="setRepoView('both')" style="font-weight:700;background:#f0f4ff;border-color:#2563eb">CP + FWK</button>
+        <button class="btn" id="btnRepoCP"   onclick="setRepoView('CP')"   >Solo CP</button>
+        <button class="btn" id="btnRepoFWK"  onclick="setRepoView('FWK')"  >Solo FWK</button>
+      </div>
+      <span class="spacer"></span>
+      <span class="count-note" id="rowCount"></span>
+      <button class="btn" id="btnCsvMatriz">Exportar CSV</button>
+    </div>
+    <div class="table-wrap" id="matrixWrap"></div>
+  </div>
+
+  <!-- MODELOS -->
+  <div class="panel" id="panel-modelos">
+    <div class="hint">Cada tarjeta muestra cuántas tablas usa el modelo y qué proporción está dentro de las 321 tablas replicadas en QAS. Haz clic para ver el detalle.</div>
+    <div class="filter-bar">
+      <input type="text" id="fModeloTxt" placeholder="Buscar modelo…">
+      <select id="fRepo"><option value="">Ambos repositorios</option><option value="CP">Core Platform</option><option value="FWK">Framework</option></select>
+      <select id="fOrden"><option value="name">Ordenar por nombre</option><option value="tot">Más tablas primero</option><option value="risk">Más tablas fuera de alcance primero</option></select>
+      <span class="spacer"></span>
+      <button class="btn" id="btnCsvModelos">Exportar CSV</button>
+      <button class="btn primary" id="btnCsvValidacion">Exportar validación por modelo</button>
+    </div>
+    <div class="model-grid" id="modelGrid"></div>
+    <div class="detail card" id="modelDetail" style="display:none;padding:12px"></div>
+  </div>
+
+  <!-- CRUCE -->
+  <div class="panel" id="panel-cruce">
+    <div class="hint">Referencia: las <b>321 tablas</b> marcadas como replicadas en QAS son las que <i>deberían</i> estar. Todo lo que quede fuera de ese conjunto y aun así se use en un modelo es una brecha a revisar.</div>
+    <div class="filter-bar">
+      <span class="spacer"></span>
+      <button class="btn" id="btnCsvCruce">Exportar CSV del cruce</button>
+    </div>
+    <div id="cruceSections"></div>
+  </div>
+
+  <!-- PENDIENTES POR MODELO + RF -->
+  <div class="panel" id="panel-pendientes">
+    <div class="hint">Por cada <b>modelo lógico</b> muestra las tablas aún <b>pendientes o en revisión</b>, agrupadas por Replication Flow — para saber qué RF debes ejecutar a continuación.</div>
+    <div class="filter-bar">
+      <input type="text" id="pTexto" placeholder="Buscar tabla o RF…">
+      <select id="pModelo"><option value="">Todos los modelos</option></select>
+      <select id="pRF"><option value="">Todos los RFs</option></select>
+      <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">
+        <input type="checkbox" id="pSoloConPend" checked> Solo modelos con pendientes
+      </label>
+      <span class="spacer"></span>
+      <span class="count-note" id="pCount"></span>
+      <button class="btn" id="btnCsvPend">Exportar CSV</button>
+    </div>
+    <div id="pendGrid"></div>
+  </div>
+
+  <!-- RESUMEN DINÁMICO -->
+  <div class="panel" id="panel-resumen">
+    <div class="hint">Tabla dinámica: <b>tablas pendientes</b> y <b>RFs pendientes</b> por modelo lógico. Haz clic en una fila para ver el detalle de RFs. Se actualiza en tiempo real con el avance del seguimiento.</div>
+    <div class="filter-bar">
+      <input type="text" id="rTexto" placeholder="Buscar modelo…">
+      <select id="rOrden">
+        <option value="pend_desc">Más pendientes primero</option>
+        <option value="pend_asc">Menos pendientes primero</option>
+        <option value="pct_asc">Menos % completado primero</option>
+        <option value="pct_desc">Más % completado primero</option>
+        <option value="name">Por nombre</option>
+      </select>
+      <span class="spacer"></span>
+      <span class="count-note" id="rCount"></span>
+      <button class="btn" id="btnCsvResumen">Exportar CSV</button>
+    </div>
+    <div style="overflow:auto;border:1px solid #e5e7eb;border-radius:8px;background:#fff">
+      <table id="resumenTable" style="width:100%;border-collapse:collapse;min-width:700px">
+        <thead>
+          <tr style="background:#f7f8fa;position:sticky;top:0;z-index:3">
+            <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#57606a;border-bottom:1px solid #e5e7eb;min-width:140px">Modelo</th>
+            <th style="text-align:center;padding:8px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#57606a;border-bottom:1px solid #e5e7eb;min-width:70px">Total</th>
+            <th style="text-align:center;padding:8px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#22c55e;border-bottom:1px solid #e5e7eb;min-width:80px">Validadas</th>
+            <th style="text-align:center;padding:8px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#b91c1c;border-bottom:1px solid #e5e7eb;min-width:80px">Con hallazgo</th>
+            <th style="text-align:center;padding:8px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#f59e0b;border-bottom:1px solid #e5e7eb;min-width:80px">Pendientes</th>
+            <th style="text-align:center;padding:8px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#57606a;border-bottom:1px solid #e5e7eb;min-width:70px">RFs pend.</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#57606a;border-bottom:1px solid #e5e7eb">% completado</th>
+          </tr>
+        </thead>
+        <tbody id="resumenBody"></tbody>
+      </table>
+    </div>
+    <div id="resumenDetail" style="display:none;margin-top:12px"></div>
+  </div>
+
+  <!-- EJECUTADAS POR MODELO + RF -->
+  <div class="panel" id="panel-ejecutadas">
+    <div class="hint">Por cada <b>modelo lógico</b> muestra las tablas ya <b>validadas, descartadas o con hallazgo</b>, agrupadas por Replication Flow. Las etiquetas verdes = validadas · amarillas = descartadas · rojas = hallazgo.</div>
+    <div class="filter-bar">
+      <input type="text" id="eTexto" placeholder="Buscar tabla o RF…">
+      <select id="eModelo"><option value="">Todos los modelos</option></select>
+      <select id="eRF"><option value="">Todos los RFs</option></select>
+      <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">
+        <input type="checkbox" id="eSoloConEjec" checked> Solo modelos con ejecutadas
+      </label>
+      <span class="spacer"></span>
+      <span class="count-note" id="eCount"></span>
+      <button class="btn" id="btnCsvEjec">Exportar CSV</button>
+    </div>
+    <div id="ejecGrid"></div>
+  </div>
+
+  <!-- REPLICATION FLOWS -->
+  <div class="panel" id="panel-rf">
+    <div class="hint">Vista del avance de validación agrupado por <b>Replication Flow</b>. Un RF se considera <b>completo</b> cuando todas sus tablas están validadas o descartadas. Haz clic en un RF para ver sus tablas.</div>
+    <div class="filter-bar">
+      <input type="text" id="rfTexto" placeholder="Buscar RF o tabla…">
+      <select id="rfEstado">
+        <option value="">Todos los estados</option>
+        <option value="completo">Completos</option>
+        <option value="parcial">Con avance parcial</option>
+        <option value="pendiente">Sin iniciar</option>
+      </select>
+      <span class="spacer"></span>
+      <span class="count-note" id="rfCount"></span>
+      <button class="btn" id="btnCsvRF">Exportar CSV</button>
+    </div>
+    <div id="rfGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:9px;margin-bottom:12px"></div>
+    <div class="detail card" id="rfDetail" style="display:none;padding:12px"></div>
+  </div>
+
+  <!-- SEGUIMIENTO -->
+  <div class="panel" id="panel-seguimiento">
+    <div class="hint">El avance se guarda en este navegador. Usa <b>Exportar avance</b> para respaldarlo o compartirlo, e <b>Importar avance</b> para retomarlo en otro equipo o en una versión actualizada del tablero.</div>
+    <div class="progress-row" id="progressRow"></div>
+    <div class="filter-bar">
+      <input type="text" id="sTexto" placeholder="Buscar tabla…">
+      <select id="sEstado">
+        <option value="">Todos los estados</option>
+        <option value="pendiente">Pendiente</option>
+        <option value="revision">En revisión</option>
+        <option value="validada">Validada</option>
+        <option value="hallazgo">Con hallazgo</option>
+        <option value="descartada">Descartada</option>
+      </select>
+      <select id="sAlcance">
+        <option value="">Todo el alcance</option>
+        <option value="QAS">Solo en alcance QAS</option>
+        <option value="NOQAS">Fuera del alcance QAS</option>
+      </select>
+      <select id="sPrio"><option value="">Todas</option><option value="1">Solo prioritarias (usadas fuera de alcance)</option></select>
+      <span class="spacer"></span>
+      <span class="count-note" id="segCount"></span>
+      <button class="btn" id="btnBulk">Marcar visibles…</button>
+      <button class="btn" id="btnExportJson">Exportar avance</button>
+      <button class="btn" id="btnImportJson">Importar avance</button>
+      <button class="btn" id="btnCsvSeg">Exportar CSV</button>
+      <input type="file" id="fileJson" accept="application/json" style="display:none">
+    </div>
+    <div class="table-wrap" style="max-height:64vh"><table class="track-table" id="trackTable"></table></div>
+  </div>
+
+  <div class="footer">Generado el <span id="fGen"></span> · Fuentes: TABLAS_COREP.xlsx, TABLAS_FWK.xlsx y alcance QAS del tablero del 23-07-2026</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const DATA = {"meta":{"generado":"2026-07-30","rama":"QAS","fuentes":["softys-corp-datalake-fwk","softys-corp-datalake-fwk-trf"]},"models":[{"repo":"CP","name":"Comercial","inscope":true},{"repo":"CP","name":"Costos_Historico","inscope":true},{"repo":"CP","name":"Costos_Historico_s4","inscope":true},{"repo":"CP","name":"Costos_Live","inscope":true},{"repo":"CP","name":"Costos_Live_s4","inscope":true},{"repo":"CP","name":"IBP","inscope":true},{"repo":"CP","name":"ctasxpagar","inscope":true},{"repo":"CP","name":"ctasxpagar_s4","inscope":true},{"repo":"CP","name":"e2e","inscope":true},{"repo":"CP","name":"e2e_s4","inscope":true},{"repo":"CP","name":"eerr","inscope":true},{"repo":"CP","name":"eerr_s4","inscope":true},{"repo":"CP","name":"master_data","inscope":true},{"repo":"CP","name":"master_data_s4","inscope":true},{"repo":"CP","name":"material_ledger","inscope":true},{"repo":"CP","name":"material_ledger_s4","inscope":true},{"repo":"CP","name":"pedidos","inscope":true},{"repo":"CP","name":"pedidos_s4","inscope":true},{"repo":"CP","name":"revenue","inscope":true},{"repo":"CP","name":"revenue_s4","inscope":true},{"repo":"FWK","name":"Comercial","inscope":true},{"repo":"FWK","name":"Contratos_Marco","inscope":true},{"repo":"FWK","name":"IBP","inscope":true},{"repo":"FWK","name":"Spm","inscope":true},{"repo":"FWK","name":"Spm_s4","inscope":true},{"repo":"FWK","name":"master_data","inscope":true},{"repo":"FWK","name":"master_data_s4","inscope":true},{"repo":"CP","name":"PYL_Mexico","inscope":false},{"repo":"CP","name":"atlas","inscope":false},{"repo":"CP","name":"cxc_ecc","inscope":false},{"repo":"CP","name":"cxc_s4","inscope":false},{"repo":"CP","name":"daily_stock_unificado","inscope":false},{"repo":"CP","name":"eerr_cliente_sku","inscope":false},{"repo":"CP","name":"eerr_preprod","inscope":false},{"repo":"CP","name":"epm","inscope":false},{"repo":"CP","name":"ggff","inscope":false},{"repo":"CP","name":"ggff_s4","inscope":false},{"repo":"CP","name":"master_data_catalog","inscope":false},{"repo":"CP","name":"master_data_catalog_s4","inscope":false},{"repo":"CP","name":"pulso_comercial","inscope":false},{"repo":"FWK","name":"Dias_pago","inscope":false},{"repo":"FWK","name":"Gastos_logisticos","inscope":false},{"repo":"FWK","name":"Repuestos","inscope":false},{"repo":"FWK","name":"control","inscope":false},{"repo":"FWK","name":"repuestos_s4","inscope":false},{"repo":"FWK","name":"saptrx","inscope":false}],"tables":[{"t":"ACDOCA","s":"QAS","m":[10,19],"rf":"ACDOCA_FI_0H_200"},{"t":"ACDOCA_M_EXTRACT","s":"QAS","m":[],"rf":"MODULO_CO_2H_200"},{"t":"ADR6","s":"QAS","m":[13,25,26],"rf":"MODULO_BC_0H_TP"},{"t":"AFKO","s":"QAS","m":[3,4],"rf":"MODULO_PP_0H"},{"t":"AFPO","s":"QAS","m":[3,4],"rf":"MODULO_PP_0H"},{"t":"AFVC","s":"QAS","m":[3,4],"rf":"MODULO_PP_3H"},{"t":"ASMDT","s":"QAS","m":[8,9],"rf":"MODULO_MM_24H"},{"t":"AUFK","s":"QAS","m":[1,2,3,4],"rf":"MODULO_CO_0H"},{"t":"AUSP","s":"QAS","m":[8,9,23,24],"rf":"MODULO_CA_1H"},{"t":"BKPF","s":"QAS","m":[6,7,18,19],"rf":"MODULO_FI_0H"},{"t":"BSAD_BCK","s":"QAS","m":[],"rf":"MODULO_FI_0H"},{"t":"BSEG","s":"QAS","m":[6,7],"rf":"MODULO_FI_0H"},{"t":"BSE_OIH","s":"QAS","m":[],"rf":"MODULO_FI_0H"},{"t":"CDHDR","s":"QAS","m":[6,7,8,9,16,17],"rf":"MODULO_BC_0H_TP"},{"t":"CDPOS","s":"QAS","m":[6,7,8,9,16,17],"rf":"MODULO_BC_0H_200"},{"t":"CEPC","s":"QAS","m":[3,4,11,18,19],"rf":"MODULO_CO_2H_200"},{"t":"CEPCT","s":"QAS","m":[1,2,3,4,11,12,13,18,19,26],"rf":"MODULO_CO_2H_200"},{"t":"CKHS","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"CKIS","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"CKMLCR","s":"QAS","m":[3,4],"rf":"MODULO_CO_24H"},{"t":"CKMLHD","s":"QAS","m":[1,2,3,4],"rf":"MODULO_CO_3H_200"},{"t":"CKMLMV001","s":"QAS","m":[1,2,3,4],"rf":"MODULO_CO_3H_200"},{"t":"CKMLMV009T","s":"QAS","m":[14,15],"rf":"MODULO_CO_24H"},{"t":"COBK","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"COBRB","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"COEP","s":"QAS","m":[3],"rf":"COEP_CO"},{"t":"COEPB","s":"QAS","m":[3,4],"rf":"MODULO_CO_2H_200"},{"t":"COEPL","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"COKEY","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"COSP_BAK","s":"QAS","m":[],"rf":"MODULO_CO_1H"},{"t":"COSS_BAK","s":"QAS","m":[],"rf":"MODULO_CO_1H"},{"t":"COST","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"CRHD","s":"QAS","m":[1,2,3,4],"rf":"MODULO_PP_0H_TP"},{"t":"CRTX","s":"QAS","m":[1,2,3,4],"rf":"MODULO_PP_3H"},{"t":"CSKA","s":"QAS","m":[],"rf":"MODULO_CO_0H_TP"},{"t":"CSKB","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"CSKS","s":"QAS","m":[3,4,18,19],"rf":"MODULO_CO_2H_200"},{"t":"CSKT","s":"QAS","m":[1,2,3,4,18,19],"rf":"MODULO_CO_3H_200"},{"t":"CSKU","s":"QAS","m":[],"rf":"MODULO_CO_3H_200"},{"t":"CSLA","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"CSLT","s":"QAS","m":[1,2,3,4],"rf":"MODULO_CO_3H_200"},{"t":"DD07L","s":"QAS","m":[],"rf":"MODULO_BC_0H_200"},{"t":"DD07T","s":"QAS","m":[1,2,3,4,14,15,18,19],"rf":"MODULO_BC_12H"},{"t":"EBAN","s":"QAS","m":[8,9],"rf":"MODULO_MM_3H"},{"t":"EBKN","s":"QAS","m":[8,9],"rf":"MODULO_MM_3H"},{"t":"EKBE","s":"QAS","m":[6,7,8,9,23,24],"rf":"MODULO_MM_24H"},{"t":"EKBZ","s":"QAS","m":[23,24],"rf":"MODULO_MM_24H"},{"t":"EKES","s":"QAS","m":[8,9],"rf":"MODULO_MM_3H"},{"t":"EKET","s":"QAS","m":[8,9,23,24],"rf":"MODULO_MM_3H"},{"t":"EKKN","s":"QAS","m":[6,7],"rf":"MODULO_MM_0H_200_TP"},{"t":"EKKO","s":"QAS","m":[6,7,8,9,23,24],"rf":"MODULO_MM_3H"},{"t":"EKPO","s":"QAS","m":[6,7,8,9,23,24],"rf":"MODULO_MM_3H"},{"t":"ESKN","s":"QAS","m":[8,9],"rf":"MODULO_MM_24H"},{"t":"ESLL","s":"QAS","m":[8,9],"rf":"MODULO_MM_24H"},{"t":"ESSR","s":"QAS","m":[6,7,8,9],"rf":"MODULO_MM_24H"},{"t":"ESUH","s":"QAS","m":[8,9],"rf":"MODULO_MM_24H"},{"t":"FINSC_CMP_VERSND","s":"QAS","m":[],"rf":"MODULO_FI_2H_200"},{"t":"FINSC_LD_CMP","s":"QAS","m":[],"rf":"MODULO_FI_2H_200"},{"t":"FINSC_LEDGER_REP","s":"QAS","m":[],"rf":"MODULO_FI_2H_200"},{"t":"FINS_BCF_FY","s":"QAS","m":[],"rf":"MODULO_FI_0H"},{"t":"JEST","s":"QAS","m":[3,4],"rf":"MODULO_CA_0H_200"},{"t":"JSTO","s":"QAS","m":[3,4],"rf":"MODULO_CA_2H"},{"t":"J_1BNFDOC","s":"QAS","m":[23,24],"rf":"MODULO_FI_24H_200"},{"t":"J_1BNFLIN","s":"QAS","m":[23,24],"rf":"MODULO_FI_24H_200"},{"t":"J_1BNFSTX","s":"QAS","m":[23,24],"rf":"MODULO_FI_24H_200"},{"t":"KEKO","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"KNA1","s":"QAS","m":[0,13,16,17,18,19,20,25,26],"rf":"MODULO_FI_0H_200"},{"t":"KNC1_BCK","s":"QAS","m":[],"rf":"MODULO_FI_0H"},{"t":"KNCX_DIF","s":"QAS","m":[],"rf":"MODULO_FI_0H"},{"t":"KNVH","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"KNVP","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_FI_3H_200"},{"t":"KNVV","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"LFA1","s":"QAS","m":[6,7,8,9,13,23,24,25,26],"rf":"MODULO_FI_24H_200"},{"t":"LFB1","s":"QAS","m":[6,7,8,9,23,24],"rf":"MODULO_FI_24H_200"},{"t":"LFBK","s":"QAS","m":[23,24],"rf":"MODULO_FI_24H_200"},{"t":"LFM1","s":"QAS","m":[6,7,8,9,23,24],"rf":"MODULO_MM_24H"},{"t":"LIKP","s":"QAS","m":[16,17],"rf":"MODULO_SD_0H_200_TP"},{"t":"LIPS","s":"QAS","m":[16,17],"rf":"MODULO_SD_0H_200_TP"},{"t":"MAKT","s":"QAS","m":[1,2,3,4,8,9,12,13,14,15,18,19,23,24,25,26],"rf":"MODULO_MM_0H_200"},{"t":"MARA","s":"QAS","m":[1,2,3,4,8,9,12,13,16,17,18,19,23,24,25,26],"rf":"MODULO_MM_0H_200_TP"},{"t":"MARC","s":"QAS","m":[12,13,18,25,26],"rf":"CDS_MM_24H_200"},{"t":"MARD","s":"QAS","m":[12,13,14,15,16,17,26],"rf":"CDS_MM_0H_200"},{"t":"MARM","s":"QAS","m":[3,4,12,13,16,17,18,19,23,24,25,26],"rf":"MODULO_MM_0H_200"},{"t":"MATDOC","s":"QAS","m":[],"rf":"MATDOC_MM_0H"},{"t":"MATDOC_EXTRACT","s":"QAS","m":[],"rf":"MODULO_MM_2H_200"},{"t":"MATERIALID","s":"QAS","m":[3,4],"rf":"MODULO_MM_3H"},{"t":"MBEW","s":"QAS","m":[1,2,3,4,12,13,18,19,25,26],"rf":"CDS_MM_24H_200"},{"t":"MCHB","s":"QAS","m":[14,15],"rf":"CDS_MM_0H_200"},{"t":"MKAL","s":"QAS","m":[1,2,3,4],"rf":"MODULO_PP_3H"},{"t":"MLCD","s":"QAS","m":[1],"rf":"RF_MLCD_CROSS"},{"t":"MLDOC","s":"QAS","m":[],"rf":"RF_MLDOC_CO"},{"t":"MVKE","s":"QAS","m":[1,2,3,4,12,13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"ONR00","s":"QAS","m":[],"rf":"MODULO_CA_0H_200"},{"t":"ONRBP","s":"QAS","m":[],"rf":"MODULO_CA_0H_200"},{"t":"ONRKL","s":"QAS","m":[],"rf":"MODULO_CA_0H_200"},{"t":"ONRKS","s":"QAS","m":[],"rf":"MODULO_CA_0H_200"},{"t":"ONROK","s":"QAS","m":[],"rf":"MODULO_CA_12H"},{"t":"ONROR","s":"QAS","m":[],"rf":"MODULO_CA_12H"},{"t":"ONROV","s":"QAS","m":[],"rf":"MODULO_CA_12H"},{"t":"ONRPD","s":"QAS","m":[],"rf":"MODULO_CA_12H"},{"t":"ONRPR","s":"QAS","m":[],"rf":"MODULO_CA_12H"},{"t":"ONRVB","s":"QAS","m":[],"rf":"MODULO_CA_12H"},{"t":"OPT_VIM_1CLEAR","s":"QAS","m":[6,7],"rf":"MODULO_VIM_0H"},{"t":"OPT_VIM_1HEAD","s":"QAS","m":[6,7],"rf":"MODULO_VIM_0H"},{"t":"OPT_VIM_1PROC","s":"QAS","m":[6,7],"rf":"MODULO_VIM_0H"},{"t":"OPT_VIM_1WI_AGT","s":"QAS","m":[6,7],"rf":"MODULO_VIM_0H"},{"t":"OPT_VIM_2HEAD","s":"QAS","m":[6,7],"rf":"MODULO_VIM_0H"},{"t":"OPT_VIM_HD_DP","s":"QAS","m":[6,7],"rf":"MODULO_VIM_0H"},{"t":"OPT_VIM_T100","s":"QAS","m":[6,7],"rf":"MODULO_VIM_0H"},{"t":"OPT_VIM_T101T","s":"QAS","m":[6,7],"rf":"MODULO_VIM_0H"},{"t":"PA0001","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_HR_200_2H"},{"t":"PLAS","s":"QAS","m":[3,4],"rf":"MODULO_PP_3H"},{"t":"PLKO","s":"QAS","m":[],"rf":"MODULO_PP_0H"},{"t":"PLPO","s":"QAS","m":[3,4],"rf":"MODULO_PP_0H"},{"t":"PRCD_ELEMENTS","s":"QAS","m":[19],"rf":"MODULO_SD_0H_200_RT"},{"t":"PROJ","s":"QAS","m":[],"rf":"MODULO_PS_0H"},{"t":"PRPS","s":"QAS","m":[6,7,14,15],"rf":"MODULO_CO_24H"},{"t":"RBKP","s":"QAS","m":[6,7],"rf":"MODULO_MM_0H_200_TP"},{"t":"RSEG","s":"QAS","m":[6,7],"rf":"MODULO_MM_0H_200_TP"},{"t":"SAPSLL_CLSNR","s":"QAS","m":[],"rf":"MODULO_GTS"},{"t":"SAPSLL_MARITC","s":"QAS","m":[],"rf":"MODULO_GTS"},{"t":"SAPSLL_NOSCA","s":"QAS","m":[],"rf":"MODULO_GTS"},{"t":"SAPSLL_TUNOS","s":"QAS","m":[],"rf":"MODULO_GTS"},{"t":"SETHEADER","s":"QAS","m":[11],"rf":"MODULO_FI_1H_200"},{"t":"SETHEADERT","s":"QAS","m":[11,18,19],"rf":"MODULO_FI_2H_200"},{"t":"SETLEAF","s":"QAS","m":[3,4,11,18,19],"rf":"MODULO_FI_1H_200"},{"t":"SETNODE","s":"QAS","m":[11,18,19],"rf":"MODULO_FI_1H_200"},{"t":"SKA1","s":"QAS","m":[11,18,19],"rf":"MODULO_FI_2H_200"},{"t":"SKAT","s":"QAS","m":[6,7,11,14,15,18,19],"rf":"MODULO_FI_2H_200"},{"t":"T000","s":"QAS","m":[],"rf":"MODULO_BC_12H"},{"t":"T001","s":"QAS","m":[1,2,3,4,6,7,8,9,11,13,14,15,18,19,23,24,25,26],"rf":"MODULO_FI_2H_200"},{"t":"T001K","s":"QAS","m":[1,2,3,4,8,9,13,25,26],"rf":"MODULO_MM_3H"},{"t":"T001W","s":"QAS","m":[1,2,3,4,8,9,12,13,14,15,18,19,25,26],"rf":"MODULO_MM_2H_200"},{"t":"T002","s":"QAS","m":[14,15],"rf":"MODULO_FI_1H_200"},{"t":"T003","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T003O","s":"QAS","m":[3,4],"rf":"MODULO_CO_0H"},{"t":"T003P","s":"QAS","m":[1,2,3,4],"rf":"MODULO_CO_3H_200"},{"t":"T003T","s":"QAS","m":[6,7],"rf":"MODULO_FI_12H"},{"t":"T004","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T004T","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T005","s":"QAS","m":[],"rf":"MODULO_BC_24H_200"},{"t":"T005T","s":"QAS","m":[0,1,2,3,4,11,13,14,15,18,19,20,23,24,25,26],"rf":"MODULO_BC_24H_200"},{"t":"T005U","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_BC_24H_200"},{"t":"T006","s":"QAS","m":[3,4,11,23,24],"rf":"MODULO_BC_24H_200"},{"t":"T006A","s":"QAS","m":[1,2,3,4,11,13,14,15,16,17,18,19,25,26],"rf":"MODULO_BC_2H_200"},{"t":"T008","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T008T","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T009T","s":"QAS","m":[],"rf":"MODULO_BC_2H_200"},{"t":"T014","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T014T","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T023T","s":"QAS","m":[1,2,3,4,8,9,12,13,14,15,18,19,25,26],"rf":"MODULO_MM_2H_200"},{"t":"T024","s":"QAS","m":[6,7,8,9],"rf":"MODULO_MM_24H"},{"t":"T024E","s":"QAS","m":[6,7,23,24],"rf":"MODULO_MM_24H"},{"t":"T024X","s":"QAS","m":[12,13,18,19,25,26],"rf":"MODULO_MM_2H_200"},{"t":"T040","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T040A","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T040S","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T040T","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T042Z","s":"QAS","m":[6,7],"rf":"MODULO_FI_12H"},{"t":"T047M","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T047N","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T052","s":"QAS","m":[6,7,8,9],"rf":"MODULO_FI_24H_200"},{"t":"T053R","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T053S","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T074T","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T074U","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T077X","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_FI_24H_200"},{"t":"T077Y","s":"QAS","m":[8,9],"rf":"MODULO_MM_24H"},{"t":"T134T","s":"QAS","m":[12,13,14,15,18,19,25,26],"rf":"MODULO_MM_2H_200"},{"t":"T141T","s":"QAS","m":[18,19],"rf":"MODULO_MM_2H_200"},{"t":"T148T","s":"QAS","m":[14,15],"rf":"MODULO_MM_24H"},{"t":"T156T","s":"QAS","m":[23,24],"rf":"MODULO_MM_24H"},{"t":"T161T","s":"QAS","m":[6,7],"rf":"MODULO_MM_0H_200"},{"t":"T171","s":"QAS","m":[13,18,19,26],"rf":"MODULO_SD_2H_200"},{"t":"T171T","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"T178T","s":"QAS","m":[12,13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"T179","s":"QAS","m":[3,4,18],"rf":"MODULO_SD_2H_200"},{"t":"T179T","s":"QAS","m":[1,2,3,4,14,15,18,19],"rf":"MODULO_FI_2H_200"},{"t":"T258I","s":"QAS","m":[18,19],"rf":"MODULO_CO_2H_200"},{"t":"T372M_T","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_PM_2H_200"},{"t":"T685","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"T685T","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"T880","s":"QAS","m":[],"rf":"MODULO_CA_12H"},{"t":"T881","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"T881T","s":"QAS","m":[],"rf":"MODULO_FI_12H"},{"t":"TAUUM","s":"QAS","m":[16,17],"rf":"MODULO_CA_0H_200"},{"t":"TBSGT","s":"QAS","m":[8,9],"rf":"MODULO_MM_24H"},{"t":"TCK01","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"TCK14","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"TCK15","s":"QAS","m":[1,2,3,4,14,15],"rf":"MODULO_CO_24H"},{"t":"TCURC","s":"QAS","m":[11],"rf":"MODULO_BC_2H_200"},{"t":"TCURF","s":"QAS","m":[],"rf":"MODULO_BC_2H_200"},{"t":"TCURR","s":"QAS","m":[6,7,8,9,13,18,19,23,24,25,26],"rf":"MODULO_BC_1H"},{"t":"TCURT","s":"QAS","m":[8,9,11],"rf":"MODULO_BC_1H"},{"t":"TCURV","s":"QAS","m":[],"rf":"MODULO_BC_1H"},{"t":"TCURW","s":"QAS","m":[],"rf":"MODULO_BC_1H"},{"t":"TCURX","s":"QAS","m":[11],"rf":"MODULO_BC_1H"},{"t":"TJ01","s":"QAS","m":[],"rf":"MODULO_CA_1H"},{"t":"TJ02","s":"QAS","m":[],"rf":"MODULO_CA_0H_200"},{"t":"TJ02T","s":"QAS","m":[],"rf":"MODULO_CA_0H_200"},{"t":"TKA01","s":"QAS","m":[3,4],"rf":"MODULO_CO_3H_200"},{"t":"TKA02","s":"QAS","m":[],"rf":"MODULO_CO_3H_200"},{"t":"TKA09","s":"QAS","m":[],"rf":"MODULO_CO_3H_200"},{"t":"TKA09V","s":"QAS","m":[],"rf":"MODULO_CO_3H_200"},{"t":"TKEVA10","s":"QAS","m":[18,19],"rf":"MODULO_CO_2H_200"},{"t":"TKKH2","s":"QAS","m":[3,4,14,15],"rf":"MODULO_CO_3H_200"},{"t":"TKT09","s":"QAS","m":[],"rf":"MODULO_CO_3H_200"},{"t":"TSPA","s":"QAS","m":[3,4,18],"rf":"MODULO_SD_2H_200"},{"t":"TSPAT","s":"QAS","m":[1,2,3,4,12,13,14,15,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVAGT","s":"QAS","m":[13,25,26],"rf":"MODULO_SD_24H_200"},{"t":"TVAPT","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVAUT","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVBUR","s":"QAS","m":[18,19],"rf":"MODULO_SD_24H_200"},{"t":"TVFK","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVFKT","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVGRT","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVKBT","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVKGR","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVKO","s":"QAS","m":[1,2,3,4,13,16,17,18,19,25,26],"rf":"MODULO_SD_0H_200"},{"t":"TVKOT","s":"QAS","m":[12,13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVKT","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVKTT","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVM1","s":"QAS","m":[3,4,18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVM1T","s":"QAS","m":[1,2,3,4,12,13,14,15,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVM2","s":"QAS","m":[3,4,18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVM2T","s":"QAS","m":[1,2,3,4,12,13,14,15,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVM3","s":"QAS","m":[3,4,18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVM3T","s":"QAS","m":[1,2,3,4,12,13,14,15,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVM4","s":"QAS","m":[3,4,18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVM4T","s":"QAS","m":[1,2,3,4,12,13,14,15,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVM5","s":"QAS","m":[3,4,18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVM5T","s":"QAS","m":[1,2,3,4,12,13,14,15,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVMST","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVRO","s":"QAS","m":[13,25,26],"rf":"MODULO_SD_24H_200"},{"t":"TVROT","s":"QAS","m":[13,25,26],"rf":"MODULO_SD_24H_200"},{"t":"TVTW","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVTWT","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVV1","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVV1T","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVV2","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVV2T","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVV3","s":"QAS","m":[18,19],"rf":"MODULO_SD_2H_200"},{"t":"TVV3T","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVV4T","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TVV5T","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_SD_2H_200"},{"t":"TWEWT","s":"QAS","m":[13,18,19,25,26],"rf":"MODULO_MM_2H_200"},{"t":"VBAK","s":"QAS","m":[16,17,18,19],"rf":"MODULO_SD_0H_200_TP"},{"t":"VBAP","s":"QAS","m":[16,17],"rf":"MODULO_SD_0H_200"},{"t":"VBEP","s":"QAS","m":[16,17],"rf":"MODULO_SD_0H_200"},{"t":"VBFA","s":"QAS","m":[16,17],"rf":"MODULO_SD_0H_200"},{"t":"VBKD","s":"QAS","m":[16,17],"rf":"MODULO_SD_0H_200"},{"t":"VBPA","s":"QAS","m":[16,17,18,19],"rf":"MODULO_SD_0H_200"},{"t":"VBRK","s":"QAS","m":[16,17,18,19],"rf":"MODULO_SD_0H_200_TP"},{"t":"VBRP","s":"QAS","m":[16,17,18,19],"rf":"MODULO_SD_0H_200"},{"t":"VTTK","s":"QAS","m":[16,17],"rf":"MODULO_MM_0H_200"},{"t":"VTTP","s":"QAS","m":[16,17],"rf":"MODULO_MM_0H_200"},{"t":"WB2_D_BVDETAIL","s":"QAS","m":[],"rf":"MODULO_SD_1H"},{"t":"WBPA","s":"QAS","m":[19],"rf":"MODULO_SD_1H"},{"t":"WBRK","s":"QAS","m":[19],"rf":"MODULO_SD_0H_200_TP"},{"t":"WBRP","s":"QAS","m":[],"rf":"MODULO_SD_1H"},{"t":"WCOCOF","s":"QAS","m":[],"rf":"MODULO_SD_1H"},{"t":"WCOCOH","s":"QAS","m":[],"rf":"MODULO_SD_1H"},{"t":"ZBI1060_CONS_001","s":"QAS","m":[18,19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"ZBI1060_TTRANSP","s":"QAS","m":[],"rf":"ZBI1060_ZSOFTYS_TP"},{"t":"ZCOA0028","s":"QAS","m":[14,15],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZFI1282","s":"QAS","m":[],"rf":"Replication Flow 1"},{"t":"ZGINV","s":"QAS","m":[12,13,26],"rf":"MODULO_MM_3H"},{"t":"ZNT_DIST_NEGOCIO","s":"QAS","m":[18,19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"ZSD_VBRK_KONV","s":"QAS","m":[18,19],"rf":"MODULO_ZSOFTYS_2H_200"},{"t":"ZTCO_CATEGORIA","s":"QAS","m":[1,2,3,4],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTCO_CATEGORIATE","s":"QAS","m":[1,2,3,4],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTCO_CONDICION","s":"QAS","m":[1,2,3,4],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTCO_JERARQUIA","s":"QAS","m":[1,2,3,4],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTCO_PRESUPUESTO","s":"QAS","m":[1,2],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTCO_UM_CLACOS","s":"QAS","m":[3,4],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTEERR_AJUSTESCO","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTEERR_CEBE","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_1H_200"},{"t":"ZTEERR_CUENTA","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_1H_200"},{"t":"ZTEERR_DCCEBE","s":"QAS","m":[5,11,12,13,19,22,26],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTEERR_DCVOLUMEN","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_1H_200"},{"t":"ZTEERR_EESTIMA","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTEERR_EPRESUP","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTEERR_ESTIMA","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTEERR_ESTRUCTUR","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_1H_200"},{"t":"ZTEERR_EXMERCADO","s":"QAS","m":[11,18,19],"rf":"MODULO_ZSOFTYS_1H_200"},{"t":"ZTEERR_GRUPO","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_1H_200"},{"t":"ZTEERR_IDENTIFIC","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTEERR_MERCADO","s":"QAS","m":[11,18,19],"rf":"MODULO_ZSOFTYS_1H_200"},{"t":"ZTEERR_NEGOCIO","s":"QAS","m":[11,12,13,18,19,25,26],"rf":"MODULO_ZSOFTYS_1H_200"},{"t":"ZTEERR_PERIODOS","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTEERR_PRESUP","s":"QAS","m":[11],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTEERR_SOCIEDAD","s":"QAS","m":[11,23],"rf":"MODULO_ZSOFTYS_1H_200"},{"t":"ZTEERR_UNEGOCIO","s":"QAS","m":[5,11,12,13,18,19,22,25,26],"rf":"MODULO_ZSOFTYS_1H_200"},{"t":"ZTI_IOAGRPC","s":"QAS","m":[18,19],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTI_IOCNEGO","s":"QAS","m":[18,19],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTSD_NEGOCIOS2","s":"QAS","m":[3,4],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTSD_NEGOCIOS2_P","s":"QAS","m":[3,4],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTSD_NEGOCIOS2_S","s":"QAS","m":[3,4],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTSD_NEGOCIOS2_T","s":"QAS","m":[3,4],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZTSD_NEGOCIOS2_X","s":"QAS","m":[3,4],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZZCLIEXCP_CFF","s":"QAS","m":[18,19],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZZCLIFDH_CFF","s":"QAS","m":[18,19],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZZCUENTA_TOPE","s":"QAS","m":[18,19],"rf":"MODULO_ZSOFTYS_2H_200"},{"t":"ZZMAT_SEGM","s":"QAS","m":[18,19],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZZMAT_VERBAS","s":"QAS","m":[18,19],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZZSECTOR","s":"QAS","m":[18,19],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZZSECTOR_AGRUP","s":"QAS","m":[18,19],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"ZZSOC_TX","s":"QAS","m":[18,19],"rf":"MODULO_ZSOFTYS_24H_200"},{"t":"Z_DISTRIB_106","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_106_2","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_106_3","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_106_4","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_202","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_301","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_401","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_503","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_503_2","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_606","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_CO02","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_CO03","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"},{"t":"Z_DISTRIB_EC02","s":"QAS","m":[19],"rf":"ZBI1060_ZSOFTYS_200"}]};
+const SCOPE_LABEL = {QAS:'En alcance QAS', PDF:'Fuera de alcance', NEW:'No listada'};
+const ESTADOS = {pendiente:'Pendiente', revision:'En revisión', validada:'Validada', hallazgo:'Con hallazgo', descartada:'Descartada'};
+const STORE_KEY = 'softys_seguimiento_v1';
+
+/* ---------- modelos y tablas ---------- */
+const MODELS     = DATA.models;                                      // all models (in + out of scope)
+const MODELS_IN  = DATA.models.filter(m => m.inscope !== false);     // only the in-scope — used as raw reference
+const TABLES     = DATA.tables.filter(t => t.s === 'QAS' || t.m.length > 0 || (t.mout && t.mout.length > 0));
+
+// 16 logical business models — each groups one or more raw model indices
+// rawIdx values correspond to positions in DATA.models array
+const LOGICAL_MODELS = [
+  {label:'Costos Live',        rawIdx:[3,4]},
+  {label:'Costos Histórico',   rawIdx:[1,2]},
+  {label:'Revenue',            rawIdx:[18,19]},
+  {label:'Master Data',        rawIdx:[12,13,25,26]},
+  {label:'Material Ledger',    rawIdx:[14,15]},
+  {label:'SPM',                rawIdx:[23,24]},
+  {label:'Oper',               rawIdx:[]},
+  {label:'Industry',           rawIdx:[]},
+  {label:'Pedidos',            rawIdx:[16,17]},
+  {label:'E2E',                rawIdx:[8,9]},
+  {label:'EERR',               rawIdx:[10,11]},
+  {label:'Comercial',          rawIdx:[0,20]},
+  {label:'Contratos',          rawIdx:[21]},
+  {label:'Cuentas x Pagar',    rawIdx:[6,7]},
+  {label:'IBP',                rawIdx:[5,22]},
+  {label:'Factory Performance',rawIdx:[]}
+];
+// Build per-logical-model table sets (union of all rawIdx)
+const logicalModelTables = LOGICAL_MODELS.map(lm=>{
+  const seen = new Set();
+  const ts = [];
+  lm.rawIdx.forEach(ri=>{ (DATA.tables.filter(t=>t.m.includes(ri))||[]).forEach(t=>{ if(!seen.has(t.t)){seen.add(t.t);ts.push(t);} }); });
+  return ts;
+});
+
+/* ==========================================================================
+   SYNC — Microsoft Graph API + localStorage fallback
+   progress.json lives in the same OneDrive folder as this HTML file.
+   All 3 team members authenticate with their @ibm.com account.
+   ========================================================================== */
+
+// ── Graph config ─────────────────────────────────────────────────────────────
+// We use the /shares/ endpoint with the folder's sharing URL — this works for
+// ANY team member who has been granted edit access, regardless of whose drive it is.
+// FOLDER_SHARE_URL = the direct link to the shared folder (from "Copy link" in OneDrive)
+const FOLDER_SHARE_URL = 'https://ibm-my.sharepoint.com/:f:/r/personal/juan_lambert_ibm_com/Documents/Softys/02.%20Iniciativas/Migraci%C3%B3n%20SAP%20S4/Proyecto/R4%20Grupo%201%20ARP/Planificaci%C3%B3n%20Salida/DataSphere/Seguimiento%20QAS';
+const PROGRESS_FILENAME = 'progress.json';
+
+// Encode sharing URL to Graph-compatible base64 format
+function encodeShareUrl(url){
+  const b64 = btoa(url).replace(/=/g,'').replace(/\//g,'_').replace(/\+/g,'-');
+  return 'u!' + b64;
+}
+
+// MSAL public client — Microsoft Azure CLI well-known client ID
+// Pre-approved by Microsoft for org OneDrive/SharePoint access, no app registration needed
+const msalApp = typeof msal !== 'undefined' ? new msal.PublicClientApplication({
+  auth: {
+    clientId: '04b07795-8ddb-461a-bbee-02f9e1bf7b46',
+    authority: 'https://login.microsoftonline.com/common',
+    redirectUri: window.location.href.split('?')[0]
+  },
+  cache: { cacheLocation: 'sessionStorage' }
+}) : null;
+
+const GRAPH_SCOPES = ['Files.ReadWrite.All', 'User.Read'];
+let _graphToken = null;
+let _syncEnabled = false;
+let _progressItemId = null; // cached driveItem id for progress.json
+let _driveId = null;        // cached drive id
+
+async function graphGetToken(){
+  if(!msalApp) return null;
+  try{
+    const accounts = msalApp.getAllAccounts();
+    if(accounts.length > 0){
+      const res = await msalApp.acquireTokenSilent({scopes: GRAPH_SCOPES, account: accounts[0]});
+      return res.accessToken;
+    }
+    const res = await msalApp.loginPopup({scopes: GRAPH_SCOPES,
+      loginHint: '' // leave blank — user picks their IBM account
+    });
+    return res.accessToken;
+  }catch(e){
+    console.warn('Graph auth failed, using localStorage fallback:', e.message);
+    return null;
+  }
+}
+
+// Resolve the folder's driveId + itemId via the shares endpoint (works for any shared user)
+async function graphResolveFolderItem(token){
+  if(_driveId && _progressItemId) return true;
+  try{
+    const encoded = encodeShareUrl(FOLDER_SHARE_URL);
+    // get folder item
+    const r1 = await fetch(`https://graph.microsoft.com/v1.0/shares/${encoded}/driveItem`, {
+      headers:{Authorization:'Bearer '+token}
+    });
+    if(!r1.ok) throw new Error('folder resolve: '+r1.status);
+    const folder = await r1.json();
+    _driveId = folder.parentReference?.driveId || folder.remoteItem?.parentReference?.driveId;
+    const folderId = folder.id;
+
+    // list children to find progress.json
+    const r2 = await fetch(`https://graph.microsoft.com/v1.0/drives/${_driveId}/items/${folderId}/children`, {
+      headers:{Authorization:'Bearer '+token}
+    });
+    if(!r2.ok) throw new Error('children list: '+r2.status);
+    const children = await r2.json();
+    const pf = (children.value||[]).find(c=>c.name===PROGRESS_FILENAME);
+    if(pf){ _progressItemId = pf.id; }
+    else {
+      // create empty progress.json
+      const r3 = await fetch(`https://graph.microsoft.com/v1.0/drives/${_driveId}/items/${folderId}:/${PROGRESS_FILENAME}:/content`, {
+        method:'PUT', headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}, body:'{}'
+      });
+      if(!r3.ok) throw new Error('create progress.json: '+r3.status);
+      const created = await r3.json();
+      _progressItemId = created.id;
+    }
+    return true;
+  }catch(e){
+    console.warn('Graph resolve failed:', e.message);
+    return false;
+  }
+}
+
+async function graphReadProgress(){
+  const token = _graphToken || await graphGetToken();
+  if(!token) return null;
+  _graphToken = token;
+  const ok = await graphResolveFolderItem(token);
+  if(!ok) return null;
+  try{
+    const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${_driveId}/items/${_progressItemId}/content`, {
+      headers:{Authorization:'Bearer '+token}
+    });
+    if(!res.ok) throw new Error(res.status);
+    return await res.json();
+  }catch(e){
+    console.warn('Graph read failed:', e.message);
+    return null;
+  }
+}
+
+async function graphWriteProgress(data){
+  const token = _graphToken || await graphGetToken();
+  if(!token) return false;
+  _graphToken = token;
+  const ok = await graphResolveFolderItem(token);
+  if(!ok) return false;
+  try{
+    const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${_driveId}/items/${_progressItemId}/content`, {
+      method:'PUT',
+      headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+    return res.ok;
+  }catch(e){
+    console.warn('Graph write failed:', e.message);
+    return false;
+  }
+}
+
+/* ---------- storage layer — Graph primary, localStorage fallback ---------- */
+let track = {};
+
+function loadTrackLocal(){
+  try{ const raw=localStorage.getItem(STORE_KEY); if(raw) track=JSON.parse(raw)||{}; }catch(e){ track={}; }
+}
+function saveTrackLocal(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(track)); }catch(e){}
+}
+
+async function loadTrack(){
+  loadTrackLocal(); // load local first so UI is instant
+  const remote = await graphReadProgress();
+  if(remote && typeof remote === 'object' && Object.keys(remote).length >= 0){
+    _syncEnabled = true;
+    // merge: remote wins for keys that exist there
+    track = Object.assign({}, track, remote);
+    saveTrackLocal();
+    setSyncStatus('✅ Sincronizado con OneDrive');
+    // re-render with merged data
+    renderKpis(); renderMatrix(); renderSeg(); renderProgress(); renderCruce(); renderPendientes(); renderEjecutadas(); renderResumen();
+  } else {
+    setSyncStatus('⚠️ Modo offline (solo local)');
+  }
+}
+
+let _saveTimer = null;
+function saveTrack(){
+  saveTrackLocal();
+  // debounce remote writes — wait 1.5s after last change
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async ()=>{
+    if(!_syncEnabled){ _syncEnabled = !!(await graphGetToken()); }
+    if(_syncEnabled){
+      const ok = await graphWriteProgress(track);
+      setSyncStatus(ok ? '✅ Guardado en OneDrive' : '⚠️ Error al guardar (local OK)');
+    }
+  }, 1500);
+}
+
+function setSyncStatus(msg){
+  const el = document.getElementById('syncStatus');
+  if(el) el.textContent = msg;
+}
+
+function getT(name){ return track[name] || {estado:'pendiente', resp:'', nota:''}; }
+function setT(name, patch){
+  const cur = getT(name);
+  track[name] = Object.assign({}, cur, patch, {ts:new Date().toISOString().slice(0,10)});
+  if(track[name].estado==='pendiente' && !track[name].resp && !track[name].nota) delete track[name];
+  saveTrack();
+}
+loadTrackLocal(); // sync load happens after init (async)// Pre-seed validated tables (only if not already tracked)
+const VALIDADAS_INIT = ["COEP","AUSP","JEST","CSKA","KNA1","KNVP","MLCD","MCHB","MARD","MBEW","MARC","ADR6","CDHDR","CDPOS","DD07L","JSTO","T003O","AUFK","COSP_BAK","COSS_BAK","DD07T","SETLEAF","T000","SETHEADER","SETNODE","T002","T005","T005T","T005U","T006","T006A","T009T","TCURC","TCURF","ONR00","ONRBP","ONRKL","ONRKS","TCK15","CKMLMV009T","PRPS","PLAS","MKAL","CRTX","AFVC","TVAGT","TVRO","TVROT","TVBUR","TCURR","TCURT","TCURV","TCURW","TCURX","COEPB","T258I","TKEVA10","CSKS","CEPC","CEPCT","ACDOCA_M_EXTRACT","KNCX_DIF","FINS_BCF_FY","KNC1_BCK","BSE_OIH","BSAD_BCK","BKPF","ONROK","ONROR","ONROV","ONRPD","ONRPR","ONRVB","T880","TAUUM","TJ01","TJ02","TJ02T","CSLA","COST","COBK","COBRB","CKIS","CKHS","CSKB","KEKO","TCK01","TCK14","CKMLHD","T003P","CSLT","CKMLMV001","TKA01","TKKH2","CSKT","COKEY","CSKU","TKA02","TKA09","TKT09","COEPL","KNVH","T171","TVFK","TVFKT","T178T","TVAPT","TVKT","TVKTT","TVV2","T685","T685T","TVTW","TVV3","TVKGR","TVV1","TVM1","TVM2","TVM3","TVM4","TVM5","TSPA","T179","TVKOT","T171T","KNVV","TVTWT","TVMST","TVGRT","TVAUT","TVKBT","TVV2T","TVV4T","TVV5T","TVV3T","TVV1T","MVKE","TVM1T","TSPAT","TVM2T","TVM3T","TVM4T","TVM5T"];
+VALIDADAS_INIT.forEach(name => { if (!track[name]) track[name] = {estado:'validada', resp:'', nota:'', ts: new Date().toISOString().slice(0,10)}; });
+saveTrackLocal();
+
+/* ---------- derivados ---------- */
+TABLES.forEach(t=>{
+  t.tot    = t.m.length;
+  t.totout = (t.mout||[]).length;
+  t.cp     = t.m.filter(i => MODELS[i] && MODELS[i].repo==='CP').length;
+  t.fw     = t.m.filter(i => MODELS[i] && MODELS[i].repo==='FWK').length;
+  t.prio   = (t.s!=='QAS' && t.tot>0);
+  // QAS table used only by out-of-scope models (not by any in-scope model)
+  t.soloOut = (t.s==='QAS' && t.tot===0 && t.totout>0);
+});
+const byName = {}; TABLES.forEach(t=>byName[t.t]=t);
+const modelTables = MODELS.map(()=>[]);
+TABLES.forEach(t=>t.m.forEach(i=>modelTables[i] && modelTables[i].push(t)));
+
+const K = {
+  totalTablas: TABLES.length,
+  qas: TABLES.filter(t=>t.s==='QAS').length,
+  usadas: TABLES.filter(t=>t.tot>0).length,
+  qasUsadas: TABLES.filter(t=>t.s==='QAS'&&t.tot>0).length,
+  qasSinUso: TABLES.filter(t=>t.s==='QAS'&&t.tot===0&&t.totout===0).length,
+  qasSoloOut: TABLES.filter(t=>t.soloOut).length,
+  fueraUsadas: TABLES.filter(t=>t.s!=='QAS'&&t.tot>0).length,
+  nuevas: TABLES.filter(t=>t.s==='NEW').length,
+  cp: MODELS.filter(m=>m.repo==='CP'&&m.inscope!==false).length,
+  fw: MODELS.filter(m=>m.repo==='FWK'&&m.inscope!==false).length
+};
+
+function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),1900); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function download(name, content, type){
+  const blob = new Blob([type==='text/csv'?'﻿'+content:content], {type:type+';charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},100);
+}
+function toCsv(rows){ return rows.map(r=>r.map(v=>{ v=String(v==null?'':v); return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(';')).join('\n'); }
+
+/* ---------- cabecera ---------- */
+document.getElementById('metaLine').innerHTML =
+  'Rama <b>QAS</b> &nbsp;|&nbsp; <b>16 modelos en alcance</b> ('+K.cp+' CP · '+K.fw+' FWK) &nbsp;|&nbsp; '+
+  K.totalTablas+' tablas analizadas &nbsp;|&nbsp; Actualizado <b>'+DATA.meta.generado+'</b>';
+document.getElementById('fGen').textContent = DATA.meta.generado;
+
+function renderKpis(){
+  const validadas = TABLES.filter(t=>getT(t.t).estado==='validada').length;
+  const hallazgos = TABLES.filter(t=>getT(t.t).estado==='hallazgo').length;
+  const html = [
+    ['neu', K.qas, 'Tablas replicadas QAS', 'conjunto de referencia'],
+    ['ok', K.qasUsadas, 'En alcance y usadas', Math.round(K.qasUsadas/K.qas*100)+'% del alcance'],
+    ['bad', K.fueraUsadas, 'Usadas fuera de alcance', 'brecha a revisar'],
+    ['warn', K.qasSinUso, 'En alcance sin uso', 'ningún modelo las consume'],
+    ['warn', K.qasSoloOut, 'En alcance, solo modelos fuera de alcance', 'usadas pero no por los 16'],
+    ['neu', K.nuevas, 'Tablas no listadas', 'aparecen en los modelos y no en el PDF'],
+    ['ok', validadas, 'Validadas', hallazgos+' con hallazgo']
+  ].map(k=>'<div class="kpi '+k[0]+'"><div class="num">'+k[1]+'</div><div class="lbl">'+k[2]+'</div><div class="sub">'+k[3]+'</div></div>').join('');
+  document.getElementById('kpis').innerHTML = html;
+}
+
+document.getElementById('bModelos').textContent = MODELS.length;
+document.getElementById('bCruce').textContent = K.fueraUsadas + K.qasSinUso + K.qasSoloOut;
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.onclick = ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-'+tab.dataset.tab).classList.add('active');
+  };
+});
+
+/* ---------- MATRIZ ---------- */
+// Matrix uses raw in-scope models (27 columns) grouped under 16 business headings
+// Each LOGICAL_MODEL entry maps to one or more raw MODELS_IN entries
+let selModel = -1;
+let matrixRepo = 'both';
+const selModelSel = document.getElementById('fModelo');
+
+// Build a flat list of raw model columns with their group label
+// Each entry: {rawIdx, label (short display), groupLabel, groupSize}
+const RAW_COLS = (()=>{
+  const cols = [];
+  LOGICAL_MODELS.forEach(lm=>{
+    lm.rawIdx.forEach(ri=>{
+      const m = MODELS[ri];
+      // Short label: strip repo prefix, show "S4" suffix if present
+      const isS4 = m.name.toLowerCase().endsWith('_s4') || m.name.toLowerCase().endsWith(' s4');
+      cols.push({rawIdx:ri, label:isS4?'S4':'ECC', fullLabel:m.name, groupLabel:lm.label, lm});
+    });
+    if(lm.rawIdx.length===0){
+      // No raw models — add a placeholder column so the group header still appears
+      cols.push({rawIdx:-1, label:'—', fullLabel:lm.label, groupLabel:lm.label, lm, empty:true});
+    }
+  });
+  return cols;
+})();
+
+// Populate model selector dropdown using raw in-scope models grouped by business name
+LOGICAL_MODELS.forEach((lm,li)=>{
+  lm.rawIdx.forEach(ri=>{
+    const m = MODELS[ri];
+    const isS4 = m.name.toLowerCase().endsWith('_s4');
+    const o=document.createElement('option');
+    o.value=ri;
+    o.textContent=lm.label+(lm.rawIdx.length>1?(isS4?' (S4)':' (ECC)'):'');
+    selModelSel.appendChild(o);
+  });
+});
+
+function visibleCols(){
+  return RAW_COLS;
+}
+
+function setRepoView(repo){
+  matrixRepo = repo;
+  ['btnRepoBoth','btnRepoCP','btnRepoFWK'].forEach(id=>{
+    const btn=document.getElementById(id);
+    btn.style.fontWeight=''; btn.style.background=''; btn.style.borderColor='';
+  });
+  const active = repo==='both'?'btnRepoBoth':repo==='CP'?'btnRepoCP':'btnRepoFWK';
+  document.getElementById(active).style.fontWeight='700';
+  document.getElementById(active).style.background='#f0f4ff';
+  document.getElementById(active).style.borderColor='#2563eb';
+  renderMatrix();
+}
+
+function buildHead(){
+  const cols = visibleCols();
+  // Row 1: fixed headers + business group spans
+  let h1 = '<tr>'
+    + '<th class="fixed-hdr" rowspan="2">Tabla SAP RAW</th>'
+    + '<th rowspan="2" style="min-width:96px">Alcance</th>'
+    + '<th rowspan="2" style="min-width:88px">Estado</th>'
+    + '<th rowspan="2" style="min-width:44px" title="Total modelos que la usan">Mod.</th>';
+  // Group consecutive columns by groupLabel
+  let gi = 0;
+  while(gi < cols.length){
+    const grp = cols[gi].groupLabel;
+    let span = 0;
+    while(gi+span < cols.length && cols[gi+span].groupLabel===grp) span++;
+    h1 += '<th class="env-hdr cp" colspan="'+span+'" style="font-size:10px;padding:4px 2px">'+esc(grp)+'</th>';
+    gi += span;
+  }
+  h1 += '</tr>';
+  // Row 2: individual sub-model labels (ECC / S4 / —)
+  let h2 = '<tr>' + cols.map((col,ci)=>{
+    const isSel = col.rawIdx === selModel;
+    return '<th class="mhdr cp'+(isSel?' sel':'')+'" data-ri="'+col.rawIdx+'" title="'+esc(col.fullLabel)+' — clic para filtrar"><span>'+(col.empty?'—':col.label)+'</span></th>';
+  }).join('') + '</tr>';
+  return '<thead>'+h1+h2+'</thead>';
+}
+
+function matrixFiltered(){
+  const txt = document.getElementById('fTexto').value.trim().toUpperCase();
+  const al  = document.getElementById('fAlcance').value;
+  const uso = document.getElementById('fUso').value;
+  const est = document.getElementById('fEstado').value;
+  const ri  = selModelSel.value === '' ? -1 : +selModelSel.value;
+  return TABLES.filter(t=>{
+    if(txt && t.t.indexOf(txt)<0) return false;
+    if(al==='NOQAS'){ if(t.s==='QAS') return false; } else if(al && t.s!==al) return false;
+    const inScopeUsed = t.m.filter(i=>MODELS[i]&&MODELS[i].inscope!==false).length;
+    if(uso==='used'   && inScopeUsed===0) return false;
+    if(uso==='unused' && inScopeUsed>0)   return false;
+    if(uso==='cp'   && !(t.cp>0 && t.fw===0)) return false;
+    if(uso==='fw'   && !(t.fw>0 && t.cp===0)) return false;
+    if(uso==='both' && !(t.cp>0 && t.fw>0))   return false;
+    if(est && getT(t.t).estado!==est) return false;
+    if(ri>=0 && !t.m.includes(ri)) return false;
+    return true;
+  });
+}
+
+function renderMatrix(){
+  const rows = matrixFiltered();
+  const ri   = selModelSel.value === '' ? -1 : +selModelSel.value;
+  selModel   = ri;
+  const cols = visibleCols();
+  const parts = ['<table id="mainTable">', buildHead(), '<tbody>'];
+  for(const t of rows){
+    const st = getT(t.t).estado;
+    const inScopeUsed = t.m.filter(i=>MODELS[i]&&MODELS[i].inscope!==false).length;
+    let cells = '';
+    for(const col of cols){
+      if(col.empty){ cells += '<td style="background:#f7f8fa;color:#d1d5db;font-size:10px">—</td>'; continue; }
+      const used = t.m.includes(col.rawIdx);
+      const isSel = col.rawIdx === ri;
+      cells += used ? '<td class="used'+(isSel?' hl':'')+'">●</td>' : '<td'+(isSel?' class="hl"':'')+'></td>';
+    }
+    parts.push('<tr><td class="tbl-name">'+esc(t.t)+'</td>'
+      +'<td><span class="chip '+t.s.toLowerCase()+'">'+SCOPE_LABEL[t.s]+'</span></td>'
+      +'<td><span class="chip st-'+st+'">'+ESTADOS[st]+'</span></td>'
+      +'<td class="count num-cell'+(inScopeUsed?'':' cnt-zero')+'">'+inScopeUsed+'</td>'
+      +cells+'</tr>');
+  }
+  parts.push('</tbody></table>');
+  document.getElementById('matrixWrap').innerHTML = parts.join('');
+  document.getElementById('rowCount').textContent = rows.length+' de '+TABLES.length+' tablas visibles';
+  document.querySelectorAll('#mainTable th.mhdr').forEach(th=>{
+    th.onclick = ()=>{ const ri=+th.dataset.ri; selModelSel.value=(selModel===ri)?'':ri; renderMatrix(); };
+  });
+}
+['fTexto','fAlcance','fUso','fEstado','fModelo'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener(id==='fTexto'?'input':'change', renderMatrix);
+});
+document.getElementById('btnCsvMatriz').onclick = ()=>{
+  const rows = matrixFiltered();
+  const head = ['Tabla','Alcance','Estado','Responsable','Nota','Total modelos (en alcance)',
+    ...RAW_COLS.filter(c=>!c.empty).map(c=>c.groupLabel+(c.lm.rawIdx.length>1?(c.label==='S4'?' (S4)':' (ECC)'):''  ))
+  ];
+  const body = rows.map(t=>{ const s=getT(t.t);
+    const inScopeUsed = t.m.filter(i=>MODELS[i]&&MODELS[i].inscope!==false).length;
+    const colCells = RAW_COLS.filter(c=>!c.empty).map(c=>t.m.includes(c.rawIdx)?'●':'');
+    return [t.t, SCOPE_LABEL[t.s], ESTADOS[s.estado], s.resp, s.nota, inScopeUsed, ...colCells]; });
+  download('softys_matriz_tablas.csv', toCsv([head].concat(body)), 'text/csv');
+  toast('CSV de la matriz descargado');
+};
+
+/* ---------- VISTA POR MODELO ---------- */
+let selCard = -1;
+function lmStats(li){
+  const ts = logicalModelTables[li];
+  const validadas = ts.filter(t=>getT(t.t).estado==='validada').length;
+  return {tot:ts.length, qas:ts.filter(t=>t.s==='QAS').length, pdf:ts.filter(t=>t.s==='PDF').length, nue:ts.filter(t=>t.s==='NEW').length, validadas};
+}
+function renderModels(){
+  const txt = document.getElementById('fModeloTxt').value.trim().toLowerCase();
+  const ord = document.getElementById('fOrden').value;
+  let idx = LOGICAL_MODELS.map((_,i)=>i).filter(i=>{
+    if(txt && LOGICAL_MODELS[i].label.toLowerCase().indexOf(txt)<0) return false;
+    return true;
+  });
+  if(ord==='tot') idx.sort((a,b)=>lmStats(b).tot-lmStats(a).tot);
+  else if(ord==='risk') idx.sort((a,b)=>(lmStats(b).pdf+lmStats(b).nue)-(lmStats(a).pdf+lmStats(a).nue));
+  document.getElementById('modelGrid').innerHTML = idx.map(i=>{
+    const s = lmStats(i), lm = LOGICAL_MODELS[i], p = v=>s.tot? (v/s.tot*100).toFixed(1)+'%' : '0%';
+    const valPct = s.tot ? Math.round(s.validadas/s.tot*100) : 0;
+    const completo = s.tot > 0 && s.validadas === s.tot;
+    const sinTablas = s.tot === 0;
+    return '<div class="model-card'+(selCard===i?' active':'')+'" data-mi="'+i+'">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between">'
+      +'<div class="mname">'+esc(lm.label)+'</div>'
+      +(completo?'<span class="chip st-validada">✓ Completo</span>':sinTablas?'<span class="chip st-descartada">Sin tablas SAP</span>':'')
+      +'</div>'
+      +(sinTablas
+        ? '<div class="mmeta" style="margin-top:6px;color:#8b949e">No usa tablas SAP directamente</div>'
+        : '<div class="bar" title="Verde=en alcance · Naranja=fuera · Rojo=no listada"><span class="b-ok" style="width:'+p(s.qas)+'"></span><span class="b-out" style="width:'+p(s.pdf)+'"></span><span class="b-new" style="width:'+p(s.nue)+'"></span></div>'
+        +'<div class="mmeta"><b>'+s.tot+'</b> tablas · '+s.qas+' en alcance · '+(s.pdf+s.nue)+' fuera</div>'
+        +'<div style="margin-top:5px">'
+        +'<div style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:#57606a">'
+        +'<div style="flex:1;height:5px;background:#eef0f3;border-radius:3px;overflow:hidden">'
+        +'<div style="width:'+valPct+'%;height:100%;background:'+(completo?'#22c55e':'#2563eb')+';border-radius:3px"></div>'
+        +'</div>'
+        +'<span style="min-width:52px;text-align:right;font-variant-numeric:tabular-nums"><b>'+s.validadas+'</b>/'+s.tot+' validadas</span>'
+        +'</div>'
+        +'</div>'
+      )
+      +'</div>';
+  }).join('') || '<div class="mmeta">Sin modelos que coincidan.</div>';
+  document.querySelectorAll('.model-card').forEach(c=>{
+    c.onclick = ()=>{ const i=+c.dataset.mi; selCard = (selCard===i?-1:i); renderModels(); renderModelDetail(); };
+  });
+}
+function renderModelDetail(){
+  const el = document.getElementById('modelDetail');
+  if(selCard<0){ el.style.display='none'; return; }
+  const lm = LOGICAL_MODELS[selCard], ts = logicalModelTables[selCard].slice().sort((a,b)=>a.t<b.t?-1:1);
+  const grp = s=>ts.filter(t=>t.s===s);
+  const block = (title,arr,cls)=> arr.length? '<h3 style="margin-top:10px">'+title+' <span class="count-note">('+arr.length+')</span></h3><div class="tag-list">'
+     + arr.map(t=>'<span class="tag '+cls+'">'+esc(t.t)+'</span>').join('') + '</div>' : '';
+  el.style.display='block';
+  el.innerHTML = '<h3>'+esc(lm.label)+' <span class="count-note">— '+ts.length+' tablas</span></h3>'
+    + (ts.length===0 ? '<p style="color:#8b949e;font-size:11.5px;margin-top:8px">Este modelo no usa tablas SAP directamente (0 tablas en el repositorio).</p>' : '')
+    + block('Fuera del alcance QAS', grp('PDF').concat(grp('NEW')), 'pdf')
+    + block('En alcance QAS', grp('QAS'), 'qas');
+}
+['fModeloTxt','fOrden'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener(id==='fModeloTxt'?'input':'change', ()=>{renderModels();});
+});
+document.getElementById('btnCsvModelos').onclick = ()=>{
+  const head=['Modelo','Total tablas','En alcance QAS','Fuera de alcance','No listadas','Validadas','% Validado','Completo'];
+  const body=LOGICAL_MODELS.map((_,i)=>{const s=lmStats(i); const pct=s.tot?Math.round(s.validadas/s.tot*100):0; return [LOGICAL_MODELS[i].label,s.tot,s.qas,s.pdf,s.nue,s.validadas,pct+'%',(s.tot>0&&s.validadas===s.tot)?'Sí':s.tot===0?'N/A':'No'];});
+  download('softys_modelos.csv', toCsv([head].concat(body)), 'text/csv');
+  toast('CSV por modelo descargado');
+};
+document.getElementById('btnCsvValidacion').onclick = ()=>{
+  const head=['Modelo','Total tablas','Validadas','Pendientes','% Validado','Completo'];
+  const body=LOGICAL_MODELS.map((_,i)=>{
+    const s=lmStats(i);
+    const pct=s.tot?Math.round(s.validadas/s.tot*100):0;
+    const completo=(s.tot>0&&s.validadas===s.tot)?'Sí':s.tot===0?'N/A':'No';
+    return [LOGICAL_MODELS[i].label, s.tot, s.validadas, s.tot-s.validadas, pct+'%', completo];
+  });
+  // sort: incomplete first, then by % desc
+  body.sort((a,b)=> a[5]==='Sí'?1:b[5]==='Sí'?-1:a[5]==='N/A'?1:b[5]==='N/A'?-1: parseInt(b[4])-parseInt(a[4]));
+  download('softys_validacion_por_modelo_'+new Date().toISOString().slice(0,10)+'.csv', toCsv([head].concat(body)), 'text/csv');
+  toast('CSV de validación por modelo descargado');
+};
+
+/* ---------- CRUCE ---------- */
+function tableLine(t, useOut){
+  const s = getT(t.t);
+  const idxArr = useOut ? (t.mout||[]) : t.m;
+  const mods = idxArr.map(i=>MODELS[i]?(MODELS[i].repo==='CP'?'CP:':'FWK:')+MODELS[i].name:'?').join(', ');
+  return '<tr><td class="tname">'+esc(t.t)+'</td><td><span class="chip '+t.s.toLowerCase()+'">'+SCOPE_LABEL[t.s]+'</span></td>'
+    +'<td class="num-cell">'+(useOut?t.totout:t.tot)+'</td><td><span class="chip st-'+s.estado+'">'+ESTADOS[s.estado]+'</span></td>'
+    +'<td style="font-size:10.5px;color:#57606a">'+esc(mods)+'</td></tr>';
+}
+function renderCruce(){
+  const fuera   = TABLES.filter(t=>t.s!=='QAS'&&t.tot>0).sort((a,b)=>b.tot-a.tot);
+  const soloOut = TABLES.filter(t=>t.soloOut).sort((a,b)=>a.t<b.t?-1:1);
+  const sinUso  = TABLES.filter(t=>t.s==='QAS'&&t.tot===0&&t.totout===0).sort((a,b)=>a.t<b.t?-1:1);
+  const ok      = TABLES.filter(t=>t.s==='QAS'&&t.tot>0).sort((a,b)=>b.tot-a.tot);
+  const secc = (id,dot,title,desc,arr,color,useOut)=>
+    '<div class="section card collapsed" id="sec-'+id+'">'
+    +'<div class="section-head"><div class="dot '+dot+'"></div><h3>'+title+'</h3>'
+    +'<span class="n" style="background:'+color[0]+';color:'+color[1]+'">'+arr.length+'</span>'
+    +'<span class="desc">'+desc+'</span><span class="spacer" style="flex:1"></span><span class="desc">▾</span></div>'
+    +'<div class="section-body"><table class="track-table"><thead><tr><th>Tabla</th><th>Alcance</th><th>Modelos</th><th>Estado</th><th>Dónde se usa</th></tr></thead><tbody>'
+    + arr.map(t=>tableLine(t,useOut)).join('') + '</tbody></table></div></div>';
+  document.getElementById('cruceSections').innerHTML =
+      secc('fuera','bad','Usadas en modelos pero no están en las 321 replicadas','revisar si falta replicarlas o si el modelo debe dejar de usarlas',fuera,['#fee2e2','#991b1b'],false)
+    + secc('soloout','warn','En alcance QAS, solo usadas por modelos fuera del alcance','están replicadas y se usan, pero no por los 16 modelos en alcance',soloOut,['#fef3c7','#92400e'],true)
+    + secc('sinuso','warn','En alcance QAS sin uso en ningún modelo','candidatas a depurar o pendientes de implementar',sinUso,['#fef9c3','#b45309'],false)
+    + secc('ok','ok','En alcance y usadas por modelos en alcance','situación esperada',ok,['#dcfce7','#166534'],false);
+  document.querySelectorAll('#cruceSections .section-head').forEach(h=>{
+    h.onclick = ()=>h.parentElement.classList.toggle('collapsed');
+  });
+}
+document.getElementById('btnCsvCruce').onclick = ()=>{
+  const head=['Categoria','Tabla','Alcance','Modelos en alcance','Modelos fuera de alcance','Estado','Responsable','Nota','Detalle modelos en alcance','Detalle modelos fuera de alcance'];
+  const cat = t => {
+    if(t.s!=='QAS'&&t.tot>0) return 'Usada fuera de alcance QAS';
+    if(t.soloOut) return 'En alcance QAS, solo modelos fuera del alcance';
+    if(t.s==='QAS'&&t.tot===0&&t.totout===0) return 'En alcance QAS sin uso';
+    if(t.s==='QAS'&&t.tot>0) return 'En alcance y usada';
+    return 'Fuera de alcance sin uso';
+  };
+  const body = TABLES.map(t=>{const s=getT(t.t);return [cat(t),t.t,SCOPE_LABEL[t.s],t.tot,t.totout,ESTADOS[s.estado],s.resp,s.nota,
+    t.m.map(i=>MODELS[i]?(MODELS[i].repo==='CP'?'CP:':'FWK:')+MODELS[i].name:'').join(' | '),
+    (t.mout||[]).map(i=>MODELS[i]?(MODELS[i].repo==='CP'?'CP:':'FWK:')+MODELS[i].name:'').join(' | ')];});
+  download('softys_cruce_alcance.csv', toCsv([head].concat(body)), 'text/csv');
+  toast('CSV del cruce descargado');
+};
+
+/* ---------- SEGUIMIENTO ---------- */
+function segFiltered(){
+  const txt=document.getElementById('sTexto').value.trim().toUpperCase();
+  const est=document.getElementById('sEstado').value;
+  const al=document.getElementById('sAlcance').value;
+  const pr=document.getElementById('sPrio').value;
+  return TABLES.filter(t=>{
+    if(txt && t.t.indexOf(txt)<0) return false;
+    if(est && getT(t.t).estado!==est) return false;
+    if(al==='QAS' && t.s!=='QAS') return false;
+    if(al==='NOQAS' && t.s==='QAS') return false;
+    if(pr==='1' && !t.prio) return false;
+    return true;
+  });
+}
+function renderProgress(){
+  const counts={pendiente:0,revision:0,validada:0,hallazgo:0,descartada:0};
+  TABLES.forEach(t=>counts[getT(t.t).estado]++);
+  const done = counts.validada+counts.descartada;
+  document.getElementById('progressRow').innerHTML =
+    '<div class="pstat" style="min-width:190px">Avance total <b>'+Math.round(done/TABLES.length*100)+'%</b>'
+    +'<div class="bar" style="flex:1;min-width:70px"><span class="b-ok" style="width:'+(done/TABLES.length*100)+'%"></span></div></div>'
+    + Object.keys(ESTADOS).map(k=>'<div class="pstat"><span class="chip st-'+k+'">'+ESTADOS[k]+'</span><b>'+counts[k]+'</b></div>').join('');
+  document.getElementById('bSeg').textContent = counts.pendiente;
+}
+function renderSeg(){
+  const rows = segFiltered();
+  const opts = est => Object.keys(ESTADOS).map(k=>'<option value="'+k+'"'+(k===est?' selected':'')+'>'+ESTADOS[k]+'</option>').join('');
+  const html = ['<thead><tr><th style="width:190px">Tabla</th><th style="width:120px">Alcance</th><th style="width:52px">Mod.</th><th style="width:140px">Estado</th><th style="width:150px">Responsable</th><th>Nota / hallazgo</th><th style="width:86px">Actualizado</th></tr></thead><tbody>'];
+  for(const t of rows){
+    const s=getT(t.t);
+    html.push('<tr data-t="'+esc(t.t)+'">'
+      +'<td class="tname">'+(t.prio?'<span title="Usada fuera del alcance replicado" style="color:#ef4444;font-weight:700">▲ </span>':'')+esc(t.t)+'</td>'
+      +'<td><span class="chip '+t.s.toLowerCase()+'">'+SCOPE_LABEL[t.s]+'</span></td>'
+      +'<td class="num-cell">'+t.tot+'</td>'
+      +'<td><select class="s-est">'+opts(s.estado)+'</select></td>'
+      +'<td><input class="s-resp" value="'+esc(s.resp)+'" placeholder="—"></td>'
+      +'<td><input class="s-nota" value="'+esc(s.nota)+'" placeholder="—"></td>'
+      +'<td style="color:#8b949e;font-size:10.5px">'+esc(s.ts||'')+'</td></tr>');
+  }
+  html.push('</tbody>');
+  document.getElementById('trackTable').innerHTML = html.join('');
+  document.getElementById('segCount').textContent = rows.length+' tablas visibles';
+  const tb = document.getElementById('trackTable');
+  tb.querySelectorAll('.s-est').forEach(el=>el.onchange=e=>{ const n=e.target.closest('tr').dataset.t; setT(n,{estado:e.target.value}); refreshLight(); });
+  tb.querySelectorAll('.s-resp').forEach(el=>el.onchange=e=>{ setT(e.target.closest('tr').dataset.t,{resp:e.target.value}); });
+  tb.querySelectorAll('.s-nota').forEach(el=>el.onchange=e=>{ setT(e.target.closest('tr').dataset.t,{nota:e.target.value}); });
+}
+function refreshLight(){ renderProgress(); renderKpis(); }
+['sTexto','sEstado','sAlcance','sPrio'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener(id==='sTexto'?'input':'change', renderSeg);
+});
+document.getElementById('btnBulk').onclick = ()=>{
+  const est = document.getElementById('sEstado').value || 'validada';
+  const rows = segFiltered();
+  if(!rows.length) return;
+  const label = ESTADOS[est];
+  if(!confirm('¿Marcar '+rows.length+' tablas visibles como "'+label+'"?')) return;
+  rows.forEach(t=>setT(t.t,{estado:est}));
+  renderSeg(); refreshLight(); toast(rows.length+' tablas marcadas como '+label);
+};
+document.getElementById('btnExportJson').onclick = ()=>{
+  download('softys_avance_'+new Date().toISOString().slice(0,10)+'.json',
+    JSON.stringify({version:1, exportado:new Date().toISOString(), avance:track}, null, 2), 'application/json');
+  toast('Avance exportado');
+};
+document.getElementById('btnImportJson').onclick = ()=>document.getElementById('fileJson').click();
+document.getElementById('fileJson').onchange = e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{
+      const obj=JSON.parse(r.result); const inc=obj.avance||obj;
+      let n=0; Object.keys(inc).forEach(k=>{ track[k]=inc[k]; n++; });
+      saveTrack(); renderSeg(); refreshLight(); renderMatrix(); renderCruce();
+      toast(n+' registros de avance importados');
+    }catch(err){ alert('No pude leer ese archivo JSON: '+err.message); } };
+  r.readAsText(f); e.target.value='';
+};
+document.getElementById('btnCsvSeg').onclick = ()=>{
+  const head=['Tabla','Alcance','Total modelos','Prioritaria','Estado','Responsable','Nota','Actualizado'];
+  const body=segFiltered().map(t=>{const s=getT(t.t);return [t.t,SCOPE_LABEL[t.s],t.tot,t.prio?'Sí':'No',ESTADOS[s.estado],s.resp,s.nota,s.ts||''];});
+  download('softys_seguimiento.csv', toCsv([head].concat(body)), 'text/csv');
+  toast('CSV de seguimiento descargado');
+};
+
+/* ---------- REPLICATION FLOWS ---------- */
+// Build RF -> tables map
+const RF_TABLES = (() => {
+  const map = {};
+  TABLES.forEach(t => {
+    if(!t.rf) return;
+    if(!map[t.rf]) map[t.rf] = [];
+    map[t.rf].push(t);
+  });
+  return map;
+})();
+const RF_NAMES = Object.keys(RF_TABLES).sort();
+document.getElementById('bRF').textContent = RF_NAMES.length;
+
+let selRF = null;
+
+function rfStats(rfName){
+  const ts = RF_TABLES[rfName] || [];
+  const validadas = ts.filter(t => { const e = getT(t.t).estado; return e==='validada'||e==='descartada'; }).length;
+  const hallazgos = ts.filter(t => getT(t.t).estado==='hallazgo').length;
+  const pendientes = ts.filter(t => getT(t.t).estado==='pendiente').length;
+  return { tot: ts.length, validadas, hallazgos, pendientes };
+}
+
+function renderRF(){
+  const txt = document.getElementById('rfTexto').value.trim().toLowerCase();
+  const est = document.getElementById('rfEstado').value;
+
+  let names = RF_NAMES.filter(rf => {
+    if(txt && rf.toLowerCase().indexOf(txt)<0 &&
+       !(RF_TABLES[rf]||[]).some(t=>t.t.toLowerCase().indexOf(txt)>=0)) return false;
+    if(est){
+      const s = rfStats(rf);
+      if(est==='completo'  && s.validadas < s.tot) return false;
+      if(est==='pendiente' && s.validadas > 0) return false;
+      if(est==='parcial'   && (s.validadas===0 || s.validadas===s.tot)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('rfCount').textContent = names.length + ' de ' + RF_NAMES.length + ' RFs visibles';
+
+  document.getElementById('rfGrid').innerHTML = names.map(rf => {
+    const s = rfStats(rf);
+    const pct = s.tot ? Math.round(s.validadas/s.tot*100) : 0;
+    const completo = s.tot > 0 && s.validadas === s.tot;
+    const color = completo ? '#22c55e' : s.validadas > 0 ? '#2563eb' : '#e5e7eb';
+    return '<div class="model-card'+(selRF===rf?' active':'')+'" data-rf="'+esc(rf)+'" style="cursor:pointer">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+      +'<div style="font-weight:600;font-size:11.5px;font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all">'+esc(rf)+'</div>'
+      +(completo?'<span class="chip st-validada" style="flex-shrink:0;margin-left:6px">✓</span>':'')
+      +'</div>'
+      +'<div style="font-size:10.5px;color:#57606a;margin-bottom:5px"><b>'+s.tot+'</b> tablas · <b>'+s.pendientes+'</b> pendientes'+(s.hallazgos?' · <b style="color:#b91c1c">'+s.hallazgos+' hallazgo'+(s.hallazgos>1?'s':'')+'</b>':'')+'</div>'
+      +'<div style="height:6px;border-radius:3px;background:#eef0f3;overflow:hidden">'
+      +'<div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:3px;transition:width .3s"></div>'
+      +'</div>'
+      +'<div style="font-size:10px;color:#8b949e;margin-top:3px;text-align:right">'+pct+'% completado</div>'
+      +'</div>';
+  }).join('') || '<div style="color:#8b949e;font-size:12px;padding:8px">Sin resultados.</div>';
+
+  document.querySelectorAll('#rfGrid .model-card').forEach(c => {
+    c.onclick = () => {
+      const rf = c.dataset.rf;
+      selRF = (selRF === rf ? null : rf);
+      renderRF();
+      renderRFDetail();
+    };
+  });
+}
+
+function renderRFDetail(){
+  const el = document.getElementById('rfDetail');
+  if(!selRF){ el.style.display='none'; return; }
+  const ts = (RF_TABLES[selRF]||[]).slice().sort((a,b)=>a.t<b.t?-1:1);
+  const s = rfStats(selRF);
+  const opts = est => Object.keys(ESTADOS).map(k=>'<option value="'+k+'"'+(k===est?' selected':'')+'>'+ESTADOS[k]+'</option>').join('');
+  el.style.display='block';
+  let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+    +'<h3 style="font-size:13px;font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace">'+esc(selRF)
+    +' <span class="count-note">('+ts.length+' tablas · '+s.pendientes+' pendientes)</span></h3>'
+    +'</div>'
+    +'<table class="track-table" style="width:100%"><thead><tr>'
+    +'<th style="width:200px">Tabla</th><th style="width:140px">Estado</th>'
+    +'<th style="width:150px">Responsable</th><th>Nota / hallazgo</th><th style="width:86px">Actualizado</th>'
+    +'</tr></thead><tbody>';
+  for(const t of ts){
+    const st = getT(t.t);
+    html += '<tr data-t="'+esc(t.t)+'">'
+      +'<td class="tname">'+esc(t.t)+'</td>'
+      +'<td><select class="s-est">'+opts(st.estado)+'</select></td>'
+      +'<td><input class="s-resp" value="'+esc(st.resp)+'" placeholder="—"></td>'
+      +'<td><input class="s-nota" value="'+esc(st.nota)+'" placeholder="—"></td>'
+      +'<td style="color:#8b949e;font-size:10.5px">'+esc(st.ts||'')+'</td></tr>';
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+  el.querySelectorAll('.s-est').forEach(sel=>sel.onchange=e=>{const n=e.target.closest('tr').dataset.t;setT(n,{estado:e.target.value});renderRF();renderKpis();renderProgress();});
+  el.querySelectorAll('.s-resp').forEach(sel=>sel.onchange=e=>{setT(e.target.closest('tr').dataset.t,{resp:e.target.value});});
+  el.querySelectorAll('.s-nota').forEach(sel=>sel.onchange=e=>{setT(e.target.closest('tr').dataset.t,{nota:e.target.value});});
+}
+
+['rfTexto','rfEstado'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener(id==='rfTexto'?'input':'change', renderRF);
+});
+
+document.getElementById('btnCsvRF').onclick = ()=>{
+  const head=['Replication Flow','Tabla','Estado','Responsable','Nota','Actualizado'];
+  const body=[];
+  RF_NAMES.forEach(rf=>{
+    (RF_TABLES[rf]||[]).sort((a,b)=>a.t<b.t?-1:1).forEach(t=>{
+      const s=getT(t.t);
+      body.push([rf,t.t,ESTADOS[s.estado],s.resp,s.nota,s.ts||'']);
+    });
+  });
+  download('softys_replication_flows.csv',toCsv([head].concat(body)),'text/csv');
+  toast('CSV de Replication Flows descargado');
+};
+
+/* ---------- PENDIENTES POR MODELO + RF ---------- */
+(()=>{
+  // Populate model selector
+  const sel = document.getElementById('pModelo');
+  LOGICAL_MODELS.forEach((lm,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=lm.label; sel.appendChild(o); });
+  // Populate RF selector
+  const selRF2 = document.getElementById('pRF');
+  RF_NAMES.forEach(rf=>{ const o=document.createElement('option'); o.value=rf; o.textContent=rf; selRF2.appendChild(o); });
+})();
+
+function renderPendientes(){
+  const txt  = document.getElementById('pTexto').value.trim().toLowerCase();
+  const lmFi = document.getElementById('pModelo').value;
+  const rfFi = document.getElementById('pRF').value;
+  const soloPend = document.getElementById('pSoloConPend').checked;
+
+  let totalPend = 0;
+  let blocks = '';
+
+  LOGICAL_MODELS.forEach((lm, li)=>{
+    if(lmFi !== '' && +lmFi !== li) return;
+
+    // Tables for this logical model (union of rawIdx)
+    const seen = new Set();
+    const lmTables = [];
+    lm.rawIdx.forEach(ri=>{
+      TABLES.filter(t=>t.m.includes(ri)).forEach(t=>{ if(!seen.has(t.t)){seen.add(t.t);lmTables.push(t);} });
+    });
+
+    // Filter to pending/revision
+    const pendientes = lmTables.filter(t=>{
+      const est = getT(t.t).estado;
+      if(est !== 'pendiente' && est !== 'revision') return false;
+      if(txt && t.t.toLowerCase().indexOf(txt)<0 && (t.rf||'').toLowerCase().indexOf(txt)<0) return false;
+      if(rfFi && t.rf !== rfFi) return false;
+      return true;
+    });
+
+    if(soloPend && pendientes.length === 0) return;
+    if(pendientes.length === 0 && lm.rawIdx.length === 0) return;
+
+    totalPend += pendientes.length;
+
+    // Group by RF
+    const byRF = {};
+    pendientes.forEach(t=>{
+      const rf = t.rf || '(sin RF)';
+      if(!byRF[rf]) byRF[rf] = [];
+      byRF[rf].push(t);
+    });
+
+    const rfKeys = Object.keys(byRF).sort();
+    const total = lmTables.length;
+    const validadas = lmTables.filter(t=>{ const e=getT(t.t).estado; return e==='validada'||e==='descartada'; }).length;
+    const pct = total ? Math.round(validadas/total*100) : 0;
+    const completo = total > 0 && validadas === total;
+
+    let inner = '';
+    if(pendientes.length === 0){
+      inner = '<div style="color:#22c55e;font-size:11.5px;padding:6px 0">✓ Todas las tablas completadas</div>';
+    } else {
+      rfKeys.forEach(rf=>{
+        const ts = byRF[rf].sort((a,b)=>a.t<b.t?-1:1);
+        inner += '<div style="margin-bottom:10px">'
+          +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+          +'<span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;font-weight:700;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:5px;padding:2px 8px">'+esc(rf)+'</span>'
+          +'<span style="font-size:10.5px;color:#57606a">'+ts.length+' tabla'+(ts.length>1?'s':'')+' pendiente'+(ts.length>1?'s':'')+'</span>'
+          +'</div>'
+          +'<div style="display:flex;flex-wrap:wrap;gap:4px">'
+          + ts.map(t=>{
+              const st = getT(t.t).estado;
+              return '<span class="tag'+(st==='revision'?' pdf':'')+'" title="'+esc(st)+'">'
+                +esc(t.t)
+                +(st==='revision'?' <span style="font-size:9px;color:#92400e">↺</span>':'')
+                +'</span>';
+            }).join('')
+          +'</div>'
+          +'</div>';
+      });
+    }
+
+    blocks += '<div class="card section" style="margin-bottom:10px">'
+      +'<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #e5e7eb">'
+      +'<div style="font-weight:600;font-size:13px">'+esc(lm.label)+'</div>'
+      +(completo
+        ? '<span class="chip st-validada">✓ Completo</span>'
+        : '<span style="font-size:11px;color:#57606a"><b>'+pendientes.length+'</b> pendientes · <b>'+pct+'%</b> completado</span>'
+      )
+      +'<div style="flex:1;height:5px;background:#eef0f3;border-radius:3px;overflow:hidden;max-width:120px">'
+      +'<div style="width:'+pct+'%;height:100%;background:'+(completo?'#22c55e':'#2563eb')+';border-radius:3px"></div>'
+      +'</div>'
+      +(rfKeys.length > 0 ? '<span style="font-size:10.5px;color:#8b949e">'+rfKeys.length+' RF'+(rfKeys.length>1?'s':'')+' involucrado'+(rfKeys.length>1?'s':'')+'</span>' : '')
+      +'</div>'
+      +'<div style="padding:10px 12px">'+inner+'</div>'
+      +'</div>';
+  });
+
+  document.getElementById('pendGrid').innerHTML = blocks || '<div style="color:#8b949e;padding:12px;font-size:12px">Sin resultados.</div>';
+  document.getElementById('pCount').textContent = totalPend + ' tablas pendientes visibles';
+  document.getElementById('bPend').textContent = totalPend;
+}
+
+['pTexto','pModelo','pRF','pSoloConPend'].forEach(id=>{
+  const el = document.getElementById(id);
+  el.addEventListener(el.type==='checkbox'?'change':id==='pTexto'?'input':'change', renderPendientes);
+});
+
+document.getElementById('btnCsvPend').onclick = ()=>{
+  const head = ['Modelo','Tabla','Replication Flow','Estado','Responsable','Nota'];
+  const body = [];
+  LOGICAL_MODELS.forEach(lm=>{
+    const seen = new Set();
+    const lmTables = [];
+    lm.rawIdx.forEach(ri=>{ TABLES.filter(t=>t.m.includes(ri)).forEach(t=>{ if(!seen.has(t.t)){seen.add(t.t);lmTables.push(t);} }); });
+    lmTables.filter(t=>{ const e=getT(t.t).estado; return e==='pendiente'||e==='revision'; })
+      .sort((a,b)=>(a.rf||'').localeCompare(b.rf||'')||a.t.localeCompare(b.t))
+      .forEach(t=>{ const s=getT(t.t); body.push([lm.label,t.t,t.rf||'',ESTADOS[s.estado],s.resp,s.nota]); });
+  });
+  download('softys_pendientes_por_rf_'+new Date().toISOString().slice(0,10)+'.csv', toCsv([head].concat(body)), 'text/csv');
+  toast('CSV de pendientes descargado');
+};
+
+/* ---------- EJECUTADAS POR MODELO + RF ---------- */
+(()=>{
+  const sel = document.getElementById('eModelo');
+  LOGICAL_MODELS.forEach((lm,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=lm.label; sel.appendChild(o); });
+  const selRF3 = document.getElementById('eRF');
+  RF_NAMES.forEach(rf=>{ const o=document.createElement('option'); o.value=rf; o.textContent=rf; selRF3.appendChild(o); });
+})();
+
+function renderEjecutadas(){
+  const txt   = document.getElementById('eTexto').value.trim().toLowerCase();
+  const lmFi  = document.getElementById('eModelo').value;
+  const rfFi  = document.getElementById('eRF').value;
+  const soloConEjec = document.getElementById('eSoloConEjec').checked;
+
+  let totalEjec = 0;
+  let blocks = '';
+
+  LOGICAL_MODELS.forEach((lm, li)=>{
+    if(lmFi !== '' && +lmFi !== li) return;
+
+    const seen = new Set();
+    const lmTables = [];
+    lm.rawIdx.forEach(ri=>{
+      TABLES.filter(t=>t.m.includes(ri)).forEach(t=>{ if(!seen.has(t.t)){seen.add(t.t);lmTables.push(t);} });
+    });
+
+    const ejecutadas = lmTables.filter(t=>{
+      const est = getT(t.t).estado;
+      if(est !== 'validada' && est !== 'descartada' && est !== 'hallazgo') return false;
+      if(txt && t.t.toLowerCase().indexOf(txt)<0 && (t.rf||'').toLowerCase().indexOf(txt)<0) return false;
+      if(rfFi && t.rf !== rfFi) return false;
+      return true;
+    });
+
+    if(soloConEjec && ejecutadas.length === 0) return;
+    if(ejecutadas.length === 0 && lm.rawIdx.length === 0) return;
+
+    totalEjec += ejecutadas.length;
+
+    // Group by RF
+    const byRF = {};
+    ejecutadas.forEach(t=>{
+      const rf = t.rf || '(sin RF)';
+      if(!byRF[rf]) byRF[rf] = [];
+      byRF[rf].push(t);
+    });
+
+    const rfKeys = Object.keys(byRF).sort();
+    const total = lmTables.length;
+    const validadas = lmTables.filter(t=>{ const e=getT(t.t).estado; return e==='validada'||e==='descartada'; }).length;
+    const pct = total ? Math.round(validadas/total*100) : 0;
+    const completo = total > 0 && validadas === total;
+
+    let inner = '';
+    if(ejecutadas.length === 0){
+      inner = '<div style="color:#8b949e;font-size:11.5px;padding:6px 0">Sin tablas ejecutadas aún.</div>';
+    } else {
+      rfKeys.forEach(rf=>{
+        const ts = byRF[rf].sort((a,b)=>a.t<b.t?-1:1);
+        inner += '<div style="margin-bottom:10px">'
+          +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+          +'<span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;font-weight:700;background:#f0fdf4;color:#166534;border:1px solid #86efac;border-radius:5px;padding:2px 8px">'+esc(rf)+'</span>'
+          +'<span style="font-size:10.5px;color:#57606a">'+ts.length+' tabla'+(ts.length>1?'s':'')+' ejecutada'+(ts.length>1?'s':'')+'</span>'
+          +'</div>'
+          +'<div style="display:flex;flex-wrap:wrap;gap:4px">'
+          + ts.map(t=>{
+              const st = getT(t.t).estado;
+              const cls = st==='hallazgo'?'new':st==='descartada'?'pdf':'qas';
+              return '<span class="tag '+cls+'" title="'+esc(ESTADOS[st])+'">'+esc(t.t)+'</span>';
+            }).join('')
+          +'</div>'
+          +'</div>';
+      });
+    }
+
+    blocks += '<div class="card section" style="margin-bottom:10px">'
+      +'<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #e5e7eb">'
+      +'<div style="font-weight:600;font-size:13px">'+esc(lm.label)+'</div>'
+      +(completo
+        ? '<span class="chip st-validada">✓ Completo</span>'
+        : '<span style="font-size:11px;color:#57606a"><b>'+ejecutadas.length+'</b> ejecutadas · <b>'+pct+'%</b> completado</span>'
+      )
+      +'<div style="flex:1;height:5px;background:#eef0f3;border-radius:3px;overflow:hidden;max-width:120px">'
+      +'<div style="width:'+pct+'%;height:100%;background:'+(completo?'#22c55e':'#2563eb')+';border-radius:3px"></div>'
+      +'</div>'
+      +(rfKeys.length > 0 ? '<span style="font-size:10.5px;color:#8b949e">'+rfKeys.length+' RF'+(rfKeys.length>1?'s':'')+' completado'+(rfKeys.length>1?'s':'')+'</span>' : '')
+      +'</div>'
+      +'<div style="padding:10px 12px">'+inner+'</div>'
+      +'</div>';
+  });
+
+  document.getElementById('ejecGrid').innerHTML = blocks || '<div style="color:#8b949e;padding:12px;font-size:12px">Sin resultados.</div>';
+  document.getElementById('eCount').textContent = totalEjec + ' tablas ejecutadas visibles';
+  document.getElementById('bEjec').textContent = totalEjec;
+}
+
+['eTexto','eModelo','eRF','eSoloConEjec'].forEach(id=>{
+  const el = document.getElementById(id);
+  el.addEventListener(el.type==='checkbox'?'change':id==='eTexto'?'input':'change', renderEjecutadas);
+});
+
+document.getElementById('btnCsvEjec').onclick = ()=>{
+  const head = ['Modelo','Tabla','Replication Flow','Estado','Responsable','Nota'];
+  const body = [];
+  LOGICAL_MODELS.forEach(lm=>{
+    const seen = new Set();
+    const lmTables = [];
+    lm.rawIdx.forEach(ri=>{ TABLES.filter(t=>t.m.includes(ri)).forEach(t=>{ if(!seen.has(t.t)){seen.add(t.t);lmTables.push(t);} }); });
+    lmTables.filter(t=>{ const e=getT(t.t).estado; return e==='validada'||e==='descartada'||e==='hallazgo'; })
+      .sort((a,b)=>(a.rf||'').localeCompare(b.rf||'')||a.t.localeCompare(b.t))
+      .forEach(t=>{ const s=getT(t.t); body.push([lm.label,t.t,t.rf||'',ESTADOS[s.estado],s.resp,s.nota]); });
+  });
+  download('softys_ejecutadas_por_rf_'+new Date().toISOString().slice(0,10)+'.csv', toCsv([head].concat(body)), 'text/csv');
+  toast('CSV de ejecutadas descargado');
+};
+
+/* ---------- renderResumen ---------- */
+function renderResumen(){
+  const txt = (document.getElementById('rTexto')||{value:''}).value.toLowerCase();
+  const orden = (document.getElementById('rOrden')||{value:'pend_desc'}).value;
+
+  let rows = LOGICAL_MODELS.map(lm => {
+    const seen = new Set();
+    const lmTables = [];
+    lm.rawIdx.forEach(ri => {
+      TABLES.filter(t => t.m.includes(ri)).forEach(t => {
+        if(!seen.has(t.t)){ seen.add(t.t); lmTables.push(t); }
+      });
+    });
+    const total = lmTables.length;
+    let validadas = 0, hallazgos = 0, pendientes = 0;
+    const rfsPend = new Set();
+    lmTables.forEach(t => {
+      const e = getT(t.t).estado;
+      if(e === 'validada') validadas++;
+      else if(e === 'hallazgo') hallazgos++;
+      else if(e === 'descartada') {}
+      else { pendientes++; if(t.rf) rfsPend.add(t.rf); }
+    });
+    const ejecutadas = validadas + hallazgos + lmTables.filter(t=>getT(t.t).estado==='descartada').length;
+    const pct = total > 0 ? Math.round(ejecutadas / total * 100) : 0;
+    return { lm, total, validadas, hallazgos, pendientes, rfsPend: [...rfsPend], pct };
+  });
+
+  if(txt) rows = rows.filter(r => r.lm.label.toLowerCase().includes(txt));
+
+  rows.sort((a,b) => {
+    if(orden==='pend_desc') return b.pendientes - a.pendientes;
+    if(orden==='pend_asc')  return a.pendientes - b.pendientes;
+    if(orden==='pct_asc')   return a.pct - b.pct;
+    if(orden==='pct_desc')  return b.pct - a.pct;
+    return a.lm.label.localeCompare(b.lm.label);
+  });
+
+  const tbody = document.getElementById('resumenBody');
+  if(!tbody) return;
+  tbody.innerHTML = rows.map((r,i) => {
+    const barColor = r.pct===100 ? '#22c55e' : r.pct>=60 ? '#2563eb' : '#f59e0b';
+    const bar = '<div style="display:flex;align-items:center;gap:6px">'
+      +'<div style="flex:1;max-width:100px;height:7px;background:#eef0f3;border-radius:4px;overflow:hidden">'
+      +'<div style="width:'+r.pct+'%;height:100%;background:'+barColor+';border-radius:4px"></div>'
+      +'</div><span style="font-size:11px;color:#57606a">'+r.pct+'%</span></div>';
+    const rfBadge = r.rfsPend.length > 0
+      ? '<span style="font-size:11px;color:#b45309;font-weight:600">'+r.rfsPend.length+'</span>'
+      : '<span style="font-size:11px;color:#22c55e">0 ✓</span>';
+    const rowStyle = 'cursor:pointer;transition:background .1s;'+(r.pct===100?'opacity:.6':'');
+    return '<tr data-ri="'+i+'" onclick="resumenToggleDetail('+i+')" style="'+rowStyle+'">'
+      +'<td style="padding:8px 12px;font-size:12px;border-bottom:1px solid #f0f0f0">'+esc(r.lm.label)+'</td>'
+      +'<td style="text-align:center;padding:8px;font-size:12px;border-bottom:1px solid #f0f0f0">'+r.total+'</td>'
+      +'<td style="text-align:center;padding:8px;font-size:12px;border-bottom:1px solid #f0f0f0;color:#16a34a;font-weight:600">'+r.validadas+'</td>'
+      +'<td style="text-align:center;padding:8px;font-size:12px;border-bottom:1px solid #f0f0f0;color:#b91c1c;font-weight:600">'+r.hallazgos+'</td>'
+      +'<td style="text-align:center;padding:8px;font-size:12px;border-bottom:1px solid #f0f0f0;color:#92400e;font-weight:600">'+r.pendientes+'</td>'
+      +'<td style="text-align:center;padding:8px;font-size:12px;border-bottom:1px solid #f0f0f0">'+rfBadge+'</td>'
+      +'<td style="padding:8px 12px;border-bottom:1px solid #f0f0f0">'+bar+'</td>'
+      +'</tr>';
+  }).join('');
+
+  const rc = document.getElementById('rCount');
+  if(rc) rc.textContent = rows.length + ' modelos';
+
+  // store rows for detail toggle
+  window._resumenRows = rows;
+  const det = document.getElementById('resumenDetail');
+  if(det) det.style.display = 'none';
+}
+
+function resumenToggleDetail(i){
+  const det = document.getElementById('resumenDetail');
+  if(!det || !window._resumenRows) return;
+  const r = window._resumenRows[i];
+  if(!r) return;
+
+  // if same row clicked again, hide
+  if(det.dataset.open === String(i) && det.style.display !== 'none'){
+    det.style.display = 'none';
+    det.dataset.open = '';
+    return;
+  }
+  det.dataset.open = String(i);
+
+  // build RF detail
+  const rfGroups = {};
+  const seen = new Set();
+  r.lm.rawIdx.forEach(ri => {
+    TABLES.filter(t => t.m.includes(ri)).forEach(t => {
+      if(seen.has(t.t)) return; seen.add(t.t);
+      const key = t.rf || '(sin RF)';
+      if(!rfGroups[key]) rfGroups[key] = { pend: [], done: [] };
+      const e = getT(t.t).estado;
+      if(e==='validada'||e==='descartada'||e==='hallazgo') rfGroups[key].done.push({t:t.t, e});
+      else rfGroups[key].pend.push(t.t);
+    });
+  });
+
+  const sorted = Object.keys(rfGroups).sort();
+  let html = '<div class="card section" style="background:#f7f8fa;padding:14px 16px">'
+    +'<div style="font-weight:700;font-size:13px;margin-bottom:10px">'+esc(r.lm.label)+' — detalle por RF</div>';
+  sorted.forEach(rf => {
+    const g = rfGroups[rf];
+    const pct = g.pend.length+g.done.length > 0 ? Math.round(g.done.length/(g.pend.length+g.done.length)*100) : 100;
+    html += '<div style="margin-bottom:8px;padding:8px 10px;background:#fff;border:1px solid #e5e7eb;border-radius:6px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+      +'<span style="font-size:11.5px;font-weight:600;color:#1f2328">'+esc(rf)+'</span>'
+      +(g.pend.length===0 ? '<span class="chip st-validada" style="font-size:10px">✓ Completo</span>' : '<span style="font-size:11px;color:#92400e">'+g.pend.length+' pendiente'+(g.pend.length>1?'s':'')+'</span>')
+      +'<span style="font-size:10.5px;color:#8b949e;margin-left:auto">'+pct+'%</span>'
+      +'</div>';
+    if(g.pend.length > 0){
+      html += '<div style="font-size:11px;color:#57606a;margin-bottom:2px">Pendientes: '
+        +g.pend.map(t=>'<span style="display:inline-block;background:#fef9c3;color:#92400e;border-radius:3px;padding:1px 5px;margin:1px;font-size:10.5px">'+esc(t)+'</span>').join(' ')
+        +'</div>';
+    }
+    if(g.done.length > 0){
+      html += '<div style="font-size:11px;color:#57606a">Ejecutadas: '
+        +g.done.map(d=>{
+          const col = d.e==='validada'?'#dcfce7':d.e==='hallazgo'?'#fee2e2':'#fef3c7';
+          const tc  = d.e==='validada'?'#166534':d.e==='hallazgo'?'#991b1b':'#92400e';
+          return '<span style="display:inline-block;background:'+col+';color:'+tc+';border-radius:3px;padding:1px 5px;margin:1px;font-size:10.5px">'+esc(d.t)+'</span>';
+        }).join(' ')
+        +'</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+
+  det.innerHTML = html;
+  det.style.display = 'block';
+  det.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+document.getElementById('btnCsvResumen').onclick = ()=>{
+  const rows = window._resumenRows || [];
+  const head = ['Modelo','Total','Validadas','Con hallazgo','Pendientes','RFs pendientes','% completado'];
+  const body = rows.map(r => [
+    r.lm.label, r.total, r.validadas, r.hallazgos, r.pendientes,
+    r.rfsPend.join('; '), r.pct+'%'
+  ]);
+  download('softys_resumen_'+new Date().toISOString().slice(0,10)+'.csv', toCsv([head].concat(body)), 'text/csv');
+  toast('CSV de resumen descargado');
+};
+
+['rTexto','rOrden'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener(id==='rTexto'?'input':'change', renderResumen);
+});
+
+/* ---------- init ---------- */
+renderKpis(); renderMatrix(); renderModels(); renderCruce(); renderProgress(); renderSeg(); renderRF(); renderPendientes(); renderEjecutadas(); renderResumen();
+// async: connect to OneDrive and sync progress after UI is ready
+loadTrack();
+</script>
+</body>
+</html>

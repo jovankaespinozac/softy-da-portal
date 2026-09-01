@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portal Data & Analytics · Softy</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --header-h: 48px;
+      --sidebar-w: 220px;
+      --blue: #0f62fe;
+      --blue-hover: #0353e9;
+      --bg: #f4f4f4;
+      --sidebar-bg: #ffffff;
+      --text: #161616;
+      --text-muted: #525252;
+      --border: #e0e0e0;
+      --active-text: #ffffff;
+    }
+
+    body {
+      font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    #header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: var(--header-h);
+      background: var(--blue);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      z-index: 100;
+    }
+
+    #hamburger {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      margin-right: 4px;
+    }
+    #hamburger span {
+      display: block;
+      width: 20px;
+      height: 2px;
+      background: #ffffff;
+      margin: 4px 0;
+      border-radius: 1px;
+    }
+
+    #header-title {
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+
+    /* ── Layout shell ── */
+    #shell {
+      display: flex;
+      padding-top: var(--header-h);
+      min-height: 100vh;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      position: fixed;
+      top: var(--header-h);
+      left: 0;
+      width: var(--sidebar-w);
+      height: calc(100vh - var(--header-h));
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      transition: transform 0.2s ease;
+      z-index: 90;
+    }
+
+    #sidebar.collapsed {
+      transform: translateX(calc(-1 * var(--sidebar-w)));
+    }
+
+    #sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 89;
+    }
+
+    #sidebar-section-label {
+      padding: 18px 16px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    #nav-list {
+      list-style: none;
+    }
+
+    #nav-list li a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      border-left: 3px solid transparent;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    #nav-list li a:hover {
+      background: #e8f0fe;
+    }
+
+    #nav-list li a.active {
+      background: var(--blue);
+      color: var(--active-text);
+      border-left-color: #002d9c;
+    }
+
+    #nav-list li a .nav-icon {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+    }
+
+    /* ── Main content ── */
+    #main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-height: calc(100vh - var(--header-h));
+      transition: margin-left 0.2s ease;
+    }
+
+    #main.full {
+      margin-left: 0;
+    }
+
+    /* ── Sections ── */
+    .section { display: none; width: 100%; height: calc(100vh - var(--header-h)); }
+    .section.active { display: flex; flex-direction: column; }
+
+    /* ── Home ── */
+    #section-home {
+      padding: 40px 48px;
+      height: auto;
+      min-height: calc(100vh - var(--header-h));
+    }
+
+    .home-heading {
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .home-subheading {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 40px;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+      max-width: 760px;
+    }
+
+    .card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card-icon {
+      width: 36px;
+      height: 36px;
+      color: var(--blue);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      flex: 1;
+    }
+
+    .card-btn {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 8px 18px;
+      background: var(--blue);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      border-radius: 2px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s;
+      width: fit-content;
+    }
+    .card-btn:hover { background: var(--blue-hover); }
+
+    /* ── iframe sections ── */
+    .section iframe {
+      width: 100%;
+      height: calc(100vh - var(--header-h));
+      border: none;
+      display: block;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 720px) {
+      #hamburger { display: block; }
+
+      #sidebar {
+        transform: translateX(calc(-1 * var(--sidebar-w)));
+        box-shadow: 4px 0 12px rgba(0,0,0,0.15);
+      }
+      #sidebar.open {
+        transform: translateX(0);
+      }
+      #sidebar-overlay.visible { display: block; }
+
+      #main { margin-left: 0; }
+      #main.full { margin-left: 0; }
+
+      #section-home { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header id="header">
+  <button id="hamburger" aria-label="Toggle menu" onclick="toggleSidebar()">
+    <span></span><span></span><span></span>
+  </button>
+
+  <!-- IBM Logo SVG inline (white on blue) -->
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 81" width="64" height="26" aria-label="IBM">
+    <style>.ibm{fill:#ffffff}</style>
+    <!-- I -->
+    <rect class="ibm" x="0" y="0" width="32" height="9"/>
+    <rect class="ibm" x="0" y="18" width="32" height="9"/>
+    <rect class="ibm" x="0" y="36" width="32" height="9"/>
+    <rect class="ibm" x="0" y="54" width="32" height="9"/>
+    <rect class="ibm" x="0" y="72" width="32" height="9"/>
+    <!-- B -->
+    <rect class="ibm" x="40" y="0" width="42" height="9"/>
+    <rect class="ibm" x="40" y="18" width="45" height="9"/>
+    <rect class="ibm" x="40" y="36" width="42" height="9"/>
+    <rect class="ibm" x="40" y="54" width="45" height="9"/>
+    <rect class="ibm" x="40" y="72" width="42" height="9"/>
+    <!-- M -->
+    <rect class="ibm" x="90" y="0" width="46" height="9"/>
+    <rect class="ibm" x="90" y="18" width="46" height="9"/>
+    <rect class="ibm" x="90" y="36" width="46" height="9"/>
+    <rect class="ibm" x="90" y="54" width="46" height="9"/>
+    <rect class="ibm" x="90" y="72" width="46" height="9"/>
+  </svg>
+
+  <span id="header-title">Data &amp; Analytics · Softy</span>
+</header>
+
+<!-- ── Sidebar overlay (mobile) ── -->
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- ── Layout shell ── -->
+<div id="shell">
+
+  <!-- ── Sidebar ── -->
+  <nav id="sidebar">
+    <div id="sidebar-section-label">Navegación</div>
+    <ul id="nav-list">
+      <li>
+        <a href="#" class="active" data-section="home" onclick="navigate(event,'home')">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9.5L10 3l7 6.5V17a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/>
+            <path d="M7 18v-6h6v6"/>
+          </svg>
+          Inicio
+        </a>
+      </li>
+      <li>
+        <a href="#" data-section="tables" onclick="navigate(event,'tables')">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="16" height="14" rx="1"/>
+            <line x1="2" y1="7" x2="18" y2="7"/>
+            <line x1="2" y1="11" x2="18" y2="11"/>
+            <line x1="7" y1="7" x2="7" y2="17"/>
+          </svg>
+          Seguimiento Tablas
+        </a>
+      </li>
+      <li>
+        <a href="#" data-section="lineage" onclick="navigate(event,'lineage')">
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="4" cy="10" r="2"/>
+            <circle cx="16" cy="5" r="2"/>
+            <circle cx="16" cy="15" r="2"/>
+            <line x1="6" y1="9" x2="14" y2="6"/>
+            <line x1="6" y1="11" x2="14" y2="14"/>
+          </svg>
+          Linaje de Tablas
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- ── Main content ── -->
+  <main id="main">
+
+    <!-- Home -->
+    <section id="section-home" class="section active">
+      <h1 class="home-heading">Portal Data &amp; Analytics</h1>
+      <p class="home-subheading">Softy · Equipo interno</p>
+
+      <div class="cards-grid">
+
+        <!-- Card: Seguimiento Tablas -->
+        <div class="card">
+          <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="1"/>
+            <line x1="3" y1="9" x2="21" y2="9"/>
+            <line x1="3" y1="15" x2="21" y2="15"/>
+            <line x1="9" y1="9" x2="9" y2="21"/>
+          </svg>
+          <div class="card-title">Seguimiento Tablas</div>
+          <div class="card-desc">Monitoreo de tablas SAP RAW vs modelos BI en QAS. Seguimiento de estado, completitud y calidad de datos por capa.</div>
+          <button class="card-btn" onclick="navigate(null,'tables')">Abrir</button>
+        </div>
+
+        <!-- Card: Linaje de Tablas -->
+        <div class="card">
+          <svg class="card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="5" cy="12" r="2"/>
+            <circle cx="19" cy="6" r="2"/>
+            <circle cx="19" cy="18" r="2"/>
+            <line x1="7" y1="11" x2="17" y2="7"/>
+            <line x1="7" y1="13" x2="17" y2="17"/>
+          </svg>
+          <div class="card-title">Linaje de Tablas</div>
+          <div class="card-desc">Grafo interactivo de linaje y dependencias entre tablas. Visualiza el flujo de datos de origen a destino en el modelo BI.</div>
+          <button class="card-btn" onclick="navigate(null,'lineage')">Abrir</button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Seguimiento Tablas -->
+    <section id="section-tables" class="section">
+      <iframe
+        src="artifacts/tables/seguimiento_tablas.html"
+        title="Seguimiento Tablas vs Modelos BI — QAS"
+        loading="lazy"
+      ></iframe>
+    </section>
+
+    <!-- Linaje de Tablas -->
+    <section id="section-lineage" class="section">
+      <iframe
+        src="artifacts/lineage/lineage_viewer.html"
+        title="Lineage Viewer — Data Lineage Interactivo"
+        loading="lazy"
+      ></iframe>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  var current = 'home';
+
+  function navigate(e, sectionId) {
+    if (e) e.preventDefault();
+
+    // Deactivate old section
+    document.getElementById('section-' + current).classList.remove('active');
+
+    // Deactivate old nav link
+    var oldLink = document.querySelector('#nav-list a[data-section="' + current + '"]');
+    if (oldLink) oldLink.classList.remove('active');
+
+    // Activate new section
+    current = sectionId;
+    document.getElementById('section-' + current).classList.add('active');
+
+    // Activate new nav link
+    var newLink = document.querySelector('#nav-list a[data-section="' + current + '"]');
+    if (newLink) newLink.classList.add('active');
+
+    // On mobile, close sidebar after navigation
+    if (window.innerWidth <= 720) {
+      closeSidebar();
+    }
+  }
+
+  function toggleSidebar() {
+    var sidebar = document.getElementById('sidebar');
+    var overlay = document.getElementById('sidebar-overlay');
+    if (sidebar.classList.contains('open')) {
+      closeSidebar();
+    } else {
+      sidebar.classList.add('open');
+      overlay.classList.add('visible');
+    }
+  }
+
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('visible');
+  }
+</script>
+
+</body>
+</html>
